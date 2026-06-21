@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World Cup 2026 — Live Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800;900&family=Archivo+Expanded:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#080B14; --panel:#111829; --panel2:#172036; --line:#243150;
+    --ink:#EAEEF7; --muted:#8590AB; --faint:#586079;
+    --gold:#F4C24B; --cyan:#34E3C8; --win:#49E08A; --loss:#FF6B7A; --live:#FF3B57;
+    --bar-bg:#1E2740;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(52,227,200,.07), transparent 60%),
+      radial-gradient(900px 500px at 0% 0%, rgba(244,194,75,.06), transparent 55%),
+      var(--bg);
+    color:var(--ink); font-family:'Inter',system-ui,sans-serif; font-size:15px;
+    line-height:1.45; -webkit-font-smoothing:antialiased; padding-bottom:60px;
+  }
+  .wrap{max-width:1280px; margin:0 auto; padding:0 20px}
+  header{position:sticky; top:0; z-index:50; background:rgba(8,11,20,.82); backdrop-filter:blur(12px); border-bottom:1px solid var(--line)}
+  .topbar{display:flex; align-items:center; gap:16px; padding:14px 0; flex-wrap:wrap}
+  .mark{font-family:'Archivo Expanded','Archivo',sans-serif; font-weight:900; letter-spacing:-.5px; font-size:21px; line-height:1; text-transform:uppercase; display:flex; align-items:baseline; gap:9px}
+  .mark .yr{color:var(--gold)} .mark .ball{font-size:18px}
+  .livedot{display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--cyan)}
+  .livedot i{width:8px; height:8px; border-radius:50%; background:var(--cyan); box-shadow:0 0 0 0 rgba(52,227,200,.6); animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,227,200,.5)}70%{box-shadow:0 0 0 9px rgba(52,227,200,0)}100%{box-shadow:0 0 0 0 rgba(52,227,200,0)}}
+  .spacer{flex:1}
+  .updated{font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums}
+  .updated b{color:var(--ink); font-weight:600}
+  button.refresh{font-family:'Inter'; font-weight:600; font-size:13px; color:var(--bg); background:var(--gold); border:none; border-radius:8px; padding:9px 15px; cursor:pointer; display:inline-flex; align-items:center; gap:7px; transition:filter .15s, transform .1s}
+  button.refresh:hover{filter:brightness(1.08)} button.refresh:active{transform:translateY(1px)}
+  button.refresh:disabled{opacity:.55; cursor:wait}
+  .refresh svg{width:14px; height:14px}
+  .refresh.spinning svg{animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  nav{display:flex; gap:4px; overflow-x:auto}
+  nav a{font-family:'Archivo',sans-serif; font-weight:700; font-size:13px; letter-spacing:.4px; text-transform:uppercase; color:var(--muted); text-decoration:none; padding:11px 14px; border-bottom:2px solid transparent; white-space:nowrap; transition:color .15s}
+  nav a:hover{color:var(--ink)} nav a.on{color:var(--ink); border-bottom-color:var(--gold)}
+  section{padding-top:34px}
+  .sec-head{display:flex; align-items:baseline; gap:12px; margin-bottom:16px; flex-wrap:wrap}
+  .sec-head h2{font-family:'Archivo Expanded','Archivo',sans-serif; font-weight:800; font-size:15px; text-transform:uppercase; letter-spacing:1.5px}
+  .sec-head .sub{font-size:12.5px; color:var(--muted)}
+  .note{font-size:11.5px; color:var(--faint); margin-top:3px}
+  .daylabel{font-family:'Archivo',sans-serif; font-weight:800; font-size:12px; letter-spacing:.6px; text-transform:uppercase; color:var(--gold); margin:18px 2px 8px; display:flex; gap:8px; align-items:center}
+  .daylabel span{height:1px; flex:1; background:var(--line)}
+  .matches-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px}
+  .mcard{background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--line); border-radius:12px; padding:13px 14px; position:relative; overflow:hidden}
+  .mcard .mtop{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px}
+  .mcard .stage{font-size:10.5px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--muted)}
+  .mcard .time{font-size:11.5px; font-weight:600; color:var(--cyan); font-variant-numeric:tabular-nums}
+  .mcard .time.final{color:var(--muted)}
+  .team-row{display:flex; align-items:center; gap:9px; padding:3px 0}
+  .team-row .flag{font-size:18px; width:24px; text-align:center; line-height:1}
+  .team-row .nm{flex:1; font-weight:600; font-size:14px}
+  .team-row .sc{font-family:'Archivo'; font-weight:800; font-size:17px; font-variant-numeric:tabular-nums; min-width:18px; text-align:right}
+  .team-row.winner .nm{color:#fff} .team-row.winner .sc{color:var(--win)} .team-row.dim{opacity:.62}
+  .mcard.live{border-color:rgba(255,59,87,.55); box-shadow:0 0 0 1px rgba(255,59,87,.25) inset}
+  .mcard.live .team-row .sc{color:var(--live)}
+  .badge-live{font-size:10px; font-weight:800; letter-spacing:.5px; color:#fff; background:var(--live); border-radius:5px; padding:2px 7px; display:inline-flex; gap:5px; align-items:center; font-variant-numeric:tabular-nums}
+  .badge-live i{width:5px; height:5px; border-radius:50%; background:#fff; animation:pulse2 1.2s infinite}
+  @keyframes pulse2{50%{opacity:.25}}
+  .odds{margin-top:11px}
+  .oddsbar{display:flex; height:7px; border-radius:4px; overflow:hidden; background:var(--bar-bg)}
+  .oddsbar i{display:block; height:100%}
+  .oddsbar .h{background:var(--cyan)} .oddsbar .d{background:#4a5675} .oddsbar .a{background:var(--gold)}
+  .oddslabels{display:flex; justify-content:space-between; margin-top:6px; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums}
+  .oddslabels b{color:var(--ink); font-weight:700}
+  .oddslabels .seg{display:flex; flex-direction:column; align-items:center; gap:1px; flex:1}
+  .oddslabels .seg.l{align-items:flex-start} .oddslabels .seg.r{align-items:flex-end}
+  .oddslabels .tag{font-size:9px; letter-spacing:.5px; text-transform:uppercase; color:var(--faint)}
+  .dec{font-size:9px; color:var(--faint); font-weight:400}
+  .groups-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px}
+  .gcard{background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden}
+  .gcard h3{font-family:'Archivo Expanded','Archivo',sans-serif; font-weight:800; font-size:12px; letter-spacing:1.2px; text-transform:uppercase; padding:11px 14px; background:var(--panel2); border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center}
+  .gcard h3 .gp{font-family:'Inter'; font-weight:500; font-size:10.5px; color:var(--muted); letter-spacing:.3px}
+  .gtable{width:100%; border-collapse:collapse}
+  .gtable th{font-size:9.5px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--faint); text-align:right; padding:7px 6px 5px}
+  .gtable th.l{text-align:left; padding-left:14px}
+  .gtable td{padding:6px 6px; font-size:13px; font-variant-numeric:tabular-nums; text-align:right; border-top:1px solid rgba(36,49,80,.5)}
+  .gtable td.team{text-align:left; padding-left:10px; display:flex; align-items:center; gap:8px; font-weight:600}
+  .gtable td.team .pos{width:15px; color:var(--faint); font-size:11px; font-weight:700; text-align:center}
+  .gtable td.team .flag{font-size:15px}
+  .gtable td.pts{font-weight:800; color:var(--ink); font-family:'Archivo'}
+  .gtable tr.qual td{background:rgba(52,227,200,.05)}
+  .gtable tr.qual td.team .pos{color:var(--cyan)}
+  .clinch{color:var(--gold); font-size:11px; margin-left:2px}
+  .advcell{padding-right:14px!important; min-width:88px}
+  .advwrap{display:flex; align-items:center; gap:7px; justify-content:flex-end}
+  .advbar{width:46px; height:5px; border-radius:3px; background:var(--bar-bg); overflow:hidden}
+  .advbar i{display:block; height:100%; background:linear-gradient(90deg,var(--cyan),#5ce0ff)}
+  .advnum{font-size:11px; font-weight:700; width:30px; text-align:right; color:var(--muted)}
+  .advnum.hi{color:var(--cyan)}
+  .stcell{padding-right:14px!important; text-align:right!important}
+  th.sthead{padding-right:14px!important}
+  .st{display:inline-block; font-size:10px; font-weight:800; letter-spacing:.5px; padding:2px 7px; border-radius:5px; white-space:nowrap}
+  .st-in{background:rgba(73,224,138,.16); color:var(--win); border:1px solid rgba(73,224,138,.4)}
+  .st-in3{background:rgba(73,224,138,.07); color:var(--win); border:1px solid rgba(73,224,138,.25)}
+  .st-out{background:rgba(255,107,122,.12); color:var(--loss); border:1px solid rgba(255,107,122,.3)}
+  .st-live{color:var(--faint); border:1px solid var(--line); font-weight:700}
+  .gtable tr.elim td.team .nm{color:var(--muted)}
+  .slot.filled{background:rgba(73,224,138,.08); border-color:rgba(73,224,138,.34)}
+  .slot.filled .nm{color:var(--ink); font-weight:700}
+  .thirdrace{margin-top:20px; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden}
+  .trhead{font-family:'Archivo',sans-serif; font-weight:800; font-size:12px; letter-spacing:.7px; text-transform:uppercase; color:var(--ink); padding:12px 15px; background:var(--panel2); border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:baseline; flex-wrap:wrap}
+  .trhead .hint{font-family:'Inter',sans-serif; font-weight:400; font-size:11px; letter-spacing:0; text-transform:none; color:var(--faint)}
+  .trlist{display:block}
+  .trow{display:flex; align-items:center; gap:10px; padding:8px 15px; font-size:13px; border-top:1px solid rgba(36,49,80,.4); border-left:3px solid transparent}
+  .trow.tin{border-left-color:var(--win)}
+  .trow.tout{opacity:.5}
+  .trow.cutline{border-top:2px solid rgba(244,194,75,.55)}
+  .trow .rk{width:18px; color:var(--faint); font-weight:700; text-align:center; font-size:11px}
+  .trow .flag{font-size:15px}
+  .trow .nm{flex:1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .trow .gtag{font-size:9.5px; color:var(--faint); text-transform:uppercase; letter-spacing:.4px}
+  .trow .pp{font-family:'Archivo',sans-serif; font-weight:800; font-variant-numeric:tabular-nums; width:50px; text-align:right}
+  .trow .pp .u{font-family:'Inter',sans-serif; font-weight:400; font-size:9px; color:var(--faint); margin-left:2px}
+  .trow .gdd{width:34px; text-align:right; color:var(--muted); font-variant-numeric:tabular-nums; font-size:12px}
+  .bracket-scroll{overflow-x:auto; padding-bottom:16px}
+  .bracket{display:flex; gap:26px; min-width:920px; padding:4px}
+  .round{display:flex; flex-direction:column; justify-content:space-around; gap:10px; min-width:172px}
+  .round-h{font-family:'Archivo',sans-serif; font-weight:800; font-size:11px; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); text-align:center; margin-bottom:4px}
+  .tie{background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:7px 9px; font-size:12px}
+  .tie .slot{display:flex; align-items:center; gap:7px; padding:3px 0}
+  .tie .slot .flag{font-size:13px; width:18px; text-align:center}
+  .tie .slot .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .tie .slot.tbd .nm{color:var(--faint); font-style:italic; font-size:11px; font-weight:400}
+  .tie .slot.locked .nm{font-weight:700; color:#fff}
+  .tie .vs{height:1px; background:var(--line); margin:3px 0}
+  .tie .mid{font-size:9.5px; color:var(--faint); text-align:center; letter-spacing:.3px; margin-top:3px}
+  .champ{align-self:center; margin:auto 0}
+  .champ .trophy{font-size:34px; text-align:center}
+  .champ .lbl{font-family:'Archivo Expanded'; font-weight:800; font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--gold); text-align:center; margin-top:4px}
+  .bracket-tabs{display:none}
+  .brtab{flex:1; font-family:'Archivo',sans-serif; font-weight:800; font-size:12.5px; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 4px; cursor:pointer; transition:background .15s,color .15s,border-color .15s}
+  .brtab.on{background:var(--cyan); color:var(--bg); border-color:var(--cyan)}
+  #predict .pname{display:flex; align-items:center; gap:10px; margin-bottom:14px}
+  #predict .pname label{font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); font-weight:700; white-space:nowrap}
+  #predict .pname input{flex:1; max-width:280px; background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:10px 12px; color:var(--ink); font-size:14px; font-family:'Inter',sans-serif}
+  #predict .pname input:focus{outline:none; border-color:var(--cyan)}
+  .lbcard{background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; margin-bottom:18px}
+  .lbhead{font-family:'Archivo',sans-serif; font-weight:800; font-size:12px; letter-spacing:.7px; text-transform:uppercase; color:var(--ink); padding:12px 15px; background:var(--panel2); border-bottom:1px solid var(--line); display:flex; gap:9px; align-items:baseline; flex-wrap:wrap}
+  .lbhead .hint{font-family:'Inter',sans-serif; font-weight:400; font-size:11px; letter-spacing:0; text-transform:none; color:var(--faint)}
+  .lbrow{display:flex; align-items:center; gap:10px; padding:10px 15px; border-top:1px solid rgba(36,49,80,.4); font-size:14px}
+  .lbrow.me{background:rgba(56,189,248,.06)}
+  .lbrow .rk{width:18px; text-align:center; color:var(--faint); font-weight:700; font-size:12px}
+  .lbrow .who{flex:1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .lbrow .youtag{font-size:9px; text-transform:uppercase; letter-spacing:.5px; color:var(--cyan); border:1px solid rgba(56,189,248,.4); border-radius:4px; padding:1px 4px; margin-left:5px}
+  .lbrow .rec{color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums}
+  .lbrow .pp{font-family:'Archivo',sans-serif; font-weight:800; font-variant-numeric:tabular-nums; min-width:44px; text-align:right}
+  .lbrow .pp .u{font-family:'Inter',sans-serif; font-weight:400; font-size:9px; color:var(--faint); margin-left:2px}
+  .lbrow .rmf{background:none; border:none; color:var(--faint); font-size:18px; line-height:1; cursor:pointer; padding:0 2px}
+  .pbtns{padding:13px 15px; border-top:1px solid rgba(36,49,80,.4); display:flex; flex-direction:column; gap:9px}
+  .pbtn{font-family:'Inter',sans-serif; font-weight:700; font-size:13px; color:var(--ink); background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:11px 13px; cursor:pointer}
+  .pbtn.solid{background:var(--cyan); color:var(--bg); border-color:var(--cyan)}
+  .addrow{display:flex; gap:8px}
+  .addrow input{flex:1; min-width:0; background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:11px 12px; color:var(--ink); font-size:13px; font-family:'Inter',sans-serif}
+  .addrow input.bad{border-color:var(--loss)}
+  .addrow input:focus{outline:none; border-color:var(--cyan)}
+  .addrow .pbtn{flex:0 0 auto}
+  .pday{margin-bottom:16px}
+  .pmatch{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:11px 12px; margin-bottom:9px}
+  .pm-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:9px}
+  .pm-top .stage{font-family:'Archivo',sans-serif; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); font-size:10px}
+  .pm-top .time{color:var(--faint); font-size:11px}
+  .pkrow{display:grid; grid-template-columns:1fr auto 1fr; gap:7px}
+  .pkrow.ko{grid-template-columns:1fr 1fr}
+  .pk{display:flex; align-items:center; justify-content:center; gap:6px; background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:10px 8px; cursor:pointer; color:var(--ink); font-family:'Inter',sans-serif; font-size:13px; font-weight:600; min-height:46px}
+  .pk .flag{font-size:16px}
+  .pk .pl{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .pk.sel{background:rgba(56,189,248,.16); border-color:var(--cyan); color:#fff}
+  .settled{margin-top:6px; background:var(--panel); border:1px solid var(--line); border-radius:11px; overflow:hidden}
+  .settled summary{cursor:pointer; padding:12px 15px; font-weight:700; font-size:13px; color:var(--muted); list-style:none}
+  .settled summary::-webkit-details-marker{display:none}
+  .settled .cnt{color:var(--faint); font-weight:400; margin-left:5px}
+  .srow{display:flex; align-items:center; gap:8px; padding:9px 15px; border-top:1px solid rgba(36,49,80,.4); font-size:13px}
+  .srow .sc{flex:1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .srow .mypick{color:var(--muted); font-size:11px; white-space:nowrap}
+  .srow .mark{font-weight:800; width:18px; text-align:center}
+  .srow.ok .mark{color:var(--win)}
+  .srow.no .mark{color:var(--loss)}
+  .kcallout{display:flex; align-items:center; gap:12px; background:linear-gradient(90deg,rgba(56,189,248,.12),transparent); border:1px solid var(--line); border-left:3px solid var(--cyan); border-radius:11px; padding:11px 15px; margin-bottom:14px}
+  .kcallout .kc-l{font-size:10px; line-height:1.1; text-transform:uppercase; letter-spacing:.6px; color:var(--cyan); font-weight:800}
+  .kcallout .kc-m{flex:1; display:flex; align-items:center; gap:8px; font-size:15px; min-width:0}
+  .kcallout .kc-m b{font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .kcallout .kc-m .flag{font-size:18px}
+  .kcallout .kc-r{font-family:'Archivo',sans-serif; font-weight:800; font-size:22px; white-space:nowrap}
+  .kcallout .kc-r span{font-family:'Inter',sans-serif; font-weight:400; font-size:10px; color:var(--faint); margin-left:4px}
+  .kgrid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  .kcol{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:12px 14px}
+  .kcolh{font-family:'Archivo',sans-serif; font-weight:800; font-size:11px; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); margin-bottom:9px; display:flex; justify-content:space-between; align-items:center; gap:6px}
+  .kcolh .kleg{font-family:'Inter',sans-serif; font-weight:600; font-size:9px; color:var(--faint); letter-spacing:.3px; white-space:nowrap}
+  .fill.gk{background:linear-gradient(90deg,#2dd4bf,#22d3ee)}
+  .kdrow{display:flex; align-items:center; gap:8px; padding:7px 0; font-size:13px; border-top:1px solid rgba(36,49,80,.35)}
+  .kdrow:first-of-type{border-top:none}
+  .kdrow .flag{font-size:14px; width:20px; text-align:center}
+  .kdrow .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600}
+  .kdrow .kcs{width:26px; text-align:center; font-weight:800; font-variant-numeric:tabular-nums; color:var(--win)}
+  .kdrow .kga{width:26px; text-align:center; font-variant-numeric:tabular-nums; color:var(--muted)}
+  .kdrow .kp{width:26px; text-align:center; font-variant-numeric:tabular-nums; color:var(--faint)}
+  .uprow{display:flex; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:11px 14px; margin-bottom:8px}
+  .uprow .up-l{flex:1; min-width:0}
+  .up-score{font-weight:700; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .up-win{font-size:11px; color:var(--muted); margin-top:3px; display:flex; align-items:center; gap:6px}
+  .up-win .flag{font-size:13px}
+  .up-prob{text-align:right; flex:0 0 auto}
+  .up-pct{font-family:'Archivo',sans-serif; font-weight:800; font-size:21px; color:var(--gold)}
+  .up-lbl{font-size:9px; text-transform:uppercase; letter-spacing:.5px; color:var(--faint)}
+  @media(max-width:640px){ .kgrid{grid-template-columns:1fr} }
+  @media(max-width:820px){
+    .bracket-tabs{display:flex; gap:6px; margin-bottom:14px}
+    .bracket-scroll{overflow-x:visible; padding-bottom:0}
+    .bracket{min-width:0; display:block; gap:0}
+    .round{display:none; min-width:0; width:100%; gap:11px}
+    .round.active{display:flex}
+    .round-h{display:none}
+    .tie{font-size:14.5px; padding:12px 14px; border-radius:11px}
+    .tie .slot{padding:6px 0}
+    .tie .slot .flag{font-size:17px; width:22px}
+    .tie .slot.tbd .nm{font-size:13px}
+    .tie .vs{margin:5px 0}
+    .champ{margin:18px 0 4px}
+    .champ .trophy{font-size:40px}
+  }
+  .legend{display:flex; gap:18px; flex-wrap:wrap; font-size:11.5px; color:var(--muted); margin-top:4px}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .legend i{width:10px; height:10px; border-radius:3px; display:inline-block}
+
+  .book{font-size:9px; color:var(--faint); margin-top:5px; text-align:right}
+  .oupill{font-size:9.5px; font-weight:700; color:var(--muted)}
+  details.more{margin-top:10px; border-top:1px solid var(--line); padding-top:8px}
+  details.more summary{font-size:11px; font-weight:700; letter-spacing:.3px; color:var(--cyan); cursor:pointer; list-style:none; outline:none}
+  details.more summary::-webkit-details-marker{display:none}
+  details.more summary:before{content:"\25B8  "; color:var(--cyan)}
+  details.more[open] summary:before{content:"\25BE  "}
+  details.completed{margin:2px 0 18px; border:1px solid var(--line); border-radius:11px; background:var(--panel); overflow:hidden}
+  details.completed>summary{font-family:'Archivo',sans-serif; font-weight:800; font-size:12px; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); padding:12px 15px; cursor:pointer; list-style:none; display:flex; align-items:center; gap:10px; outline:none}
+  details.completed>summary::-webkit-details-marker{display:none}
+  details.completed>summary:before{content:"\25B8"; color:var(--gold); font-size:11px}
+  details.completed[open]>summary:before{content:"\25BE"}
+  details.completed>summary .cnt{color:var(--faint); font-weight:600; letter-spacing:0}
+  details.completed[open]>summary{border-bottom:1px solid var(--line)}
+  details.completed .inner{padding:6px 15px 4px}
+  details.completed .daylabel{margin-top:12px}
+  .stats{margin-top:9px}
+  .strow{display:flex; align-items:center; justify-content:space-between; padding:2px 0; font-size:11.5px; font-variant-numeric:tabular-nums}
+  .strow .sv{width:46px; font-weight:700; color:var(--ink)} .strow .sv:last-child{text-align:right}
+  .strow .sl{flex:1; text-align:center; color:var(--muted); font-size:9.5px; text-transform:uppercase; letter-spacing:.5px}
+  .statbar{height:5px; border-radius:3px; background:var(--gold); overflow:hidden; margin:3px 0 8px}
+  .statbar i{display:block; height:100%; background:var(--cyan)}
+  .tl{margin-top:9px; border-top:1px dashed var(--line); padding-top:8px; display:flex; flex-direction:column; gap:4px}
+  .evrow{display:flex; align-items:center; gap:8px; font-size:11.5px}
+  .evrow.ea{flex-direction:row-reverse; text-align:right}
+  .evrow .emin{color:var(--faint); font-variant-numeric:tabular-nums; min-width:26px}
+  .evrow .eic{width:16px; text-align:center; font-size:12px}
+  .evrow .ewho{color:var(--ink)}
+  footer{margin-top:46px; padding-top:18px; border-top:1px solid var(--line); font-size:11.5px; color:var(--faint)}
+  .hcd{display:inline-flex; align-items:center; gap:3px; font-variant-numeric:tabular-nums; font-size:14px; color:var(--ink); background:rgba(244,194,75,.10); border:1px solid rgba(244,194,75,.28); border-radius:9px; padding:5px 11px; white-space:nowrap}
+  .hcd .hcd-l{font-size:9px; text-transform:uppercase; letter-spacing:.7px; color:var(--gold); font-weight:800; margin-right:4px}
+  .hcd b{font-family:'Archivo',sans-serif; font-weight:800}
+  .hcd .u{color:var(--faint); font-size:10px; margin:0 4px 0 1px}
+  .toggle{font-family:'Inter',sans-serif; font-weight:600; font-size:12px; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 13px; cursor:pointer; transition:background .15s,color .15s,border-color .15s}
+  .toggle:hover{color:var(--ink)}
+  .toggle.on{background:var(--cyan); color:var(--bg); border-color:var(--cyan)}
+  .pulse{display:grid; grid-template-columns:repeat(auto-fit,minmax(158px,1fr)); gap:12px; margin-bottom:8px}
+  .tile{background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--line); border-radius:12px; padding:14px 16px}
+  .tile .big{font-family:'Archivo Expanded','Archivo',sans-serif; font-weight:800; font-size:30px; line-height:1; font-variant-numeric:tabular-nums; color:#fff}
+  .tile .lbl{font-size:10.5px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); margin-top:8px; font-weight:700}
+  .tile .sub{font-size:10.5px; color:var(--faint); margin-top:3px}
+  .tile.gold .big{color:var(--gold)} .tile.cyan .big{color:var(--cyan)} .tile.red .big{color:var(--loss)}
+  .cd{display:flex; gap:9px}
+  .cd .seg{text-align:center}
+  .cd .seg b{font-family:'Archivo Expanded','Archivo',sans-serif; font-weight:800; font-size:25px; color:var(--gold); font-variant-numeric:tabular-nums; display:block; line-height:1}
+  .cd .seg span{font-size:8.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--faint)}
+  .subhead{font-family:'Archivo',sans-serif; font-weight:800; font-size:12.5px; letter-spacing:.8px; text-transform:uppercase; color:var(--ink); margin:26px 0 13px; display:flex; align-items:baseline; gap:10px}
+  .subhead .hint{font-family:'Inter',sans-serif; font-weight:400; font-size:11px; letter-spacing:0; text-transform:none; color:var(--faint)}
+  .boot{display:flex; flex-direction:column; gap:7px}
+  .bootrow{display:flex; align-items:center; gap:10px}
+  .bootrow .rk{width:16px; color:var(--faint); font-weight:700; font-size:12px; text-align:center}
+  .bootrow .flag{font-size:16px; width:20px; text-align:center}
+  .bootrow .nm{width:160px; font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .bootrow .track{flex:1; height:17px; background:var(--bar-bg); border-radius:5px; overflow:hidden}
+  .bootrow .fill{height:100%; background:linear-gradient(90deg,#caa23a,var(--gold)); border-radius:5px; min-width:3px}
+  .bootrow .val{width:26px; text-align:right; font-family:'Archivo',sans-serif; font-weight:800; font-variant-numeric:tabular-nums; color:var(--gold)}
+  .perstat{display:grid; grid-template-columns:repeat(auto-fill,minmax(224px,1fr)); gap:12px}
+  .pscard{background:var(--panel); border:1px solid var(--line); border-radius:11px; overflow:hidden}
+  .pscard h4{font-size:10px; letter-spacing:.6px; text-transform:uppercase; color:var(--cyan); font-weight:700; padding:10px 13px; background:var(--panel2); border-bottom:1px solid var(--line)}
+  .psrow{display:flex; align-items:center; gap:8px; padding:6px 13px; font-size:12.5px; border-top:1px solid rgba(36,49,80,.4)}
+  .psrow .rk{width:13px; color:var(--faint); font-size:11px; font-weight:700}
+  .psrow .flag{font-size:13px; width:17px; text-align:center}
+  .psrow .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .psrow .v{font-family:'Archivo',sans-serif; font-weight:800; font-variant-numeric:tabular-nums; color:var(--ink)}
+  .psrow.top .v{color:var(--gold)}
+  .pscard h4{display:flex; justify-content:space-between; align-items:center}
+  .pscard h4 .pscount{color:var(--faint); font-weight:600; font-size:10px}
+  details.psmore summary{font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--cyan); cursor:pointer; list-style:none; padding:8px 13px; border-top:1px solid rgba(36,49,80,.4); outline:none}
+  details.psmore summary::-webkit-details-marker{display:none}
+  details.psmore summary:before{content:"\25B8  "; color:var(--cyan)}
+  details.psmore[open] summary:before{content:"\25BE  "}
+  .filterbar{display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:12px}
+  .filterbar input{background:var(--panel); border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:8px 12px; font-size:13px; font-family:'Inter',sans-serif; width:250px; outline:none}
+  .filterbar input:focus{border-color:var(--cyan)}
+  .filterbar .meta{font-size:11.5px; color:var(--faint); font-variant-numeric:tabular-nums}
+  .tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:12px; max-height:560px; overflow-y:auto}
+  .ltable{width:100%; border-collapse:collapse; font-size:12.5px; min-width:780px}
+  .ltable th{position:sticky; top:0; background:var(--panel2); font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:700; padding:10px; text-align:right; cursor:pointer; white-space:nowrap; user-select:none; z-index:2}
+  .ltable th.l{text-align:left}
+  .ltable th:hover{color:var(--ink)}
+  .ltable th.sorted{color:var(--gold)}
+  .ltable td{padding:8px 10px; text-align:right; border-top:1px solid rgba(36,49,80,.5); font-variant-numeric:tabular-nums; color:var(--muted)}
+  .ltable td.l{text-align:left; color:var(--ink)}
+  .ltable td.player{display:flex; align-items:center; gap:8px; font-weight:600}
+  .ltable td.player .flag{font-size:14px}
+  .ltable tr:hover td{background:rgba(52,227,200,.04)}
+  .ltable td.hot{color:var(--gold); font-weight:800}
+  @media(max-width:600px){ .mark{font-size:17px} body{font-size:14px} }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="topbar">
+    <div class="mark"><span class="ball">&#9917;</span>World Cup <span class="yr">2026</span></div>
+    <div class="livedot"><i></i> <span id="liveStatus">Live Board</span></div>
+    <div class="hcd" id="cdHead" title="Until the Final · Jul 19, 2026 · MetLife Stadium"></div>
+    <div class="spacer"></div>
+    <div class="updated">Odds as of <b id="ts">&mdash;</b></div>
+    <button class="refresh" id="refreshBtn" onclick="forceRefresh()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+      Refresh odds
+    </button>
+  </div>
+  <nav><a href="#matches" class="on">Matches</a><a href="#groups">Groups</a><a href="#bracket">Bracket</a><a href="#predict">Predict</a><a href="#stats">Stats</a></nav>
+</div></header>
+
+<div class="wrap">
+  <section id="matches">
+    <div class="sec-head"><h2>Matches</h2><div>
+      <div class="sub">Kickoffs in your time (Central) &middot; results then upcoming fixtures with odds</div>
+      <div class="legend">
+        <span><i style="background:var(--cyan)"></i>Home win</span>
+        <span><i style="background:#4a5675"></i>Draw</span>
+        <span><i style="background:var(--gold)"></i>Away win</span>
+        <span class="note">Odds = consensus of US sportsbooks, vig removed</span>
+      </div></div>
+    </div>
+    <div id="matchesBox"></div>
+  </section>
+
+  <section id="groups">
+    <div class="sec-head"><h2>Groups</h2>
+      <div class="sub">Top 2 of each group advance, plus the 8 best third-place teams &middot; <b style="color:var(--win)">IN</b> clinched &middot; <b style="color:var(--loss)">OUT</b> eliminated &middot; <span style="color:var(--faint)">* = provisional via 3rd</span></div>
+    </div>
+    <div class="groups-grid" id="groupsBox"></div>
+    <div class="thirdrace" id="thirdRace"></div>
+  </section>
+
+  <section id="bracket">
+    <div class="sec-head"><h2>Round of 32 &rarr; Final</h2>
+      <div class="sub">Slots fill with real teams as group positions clinch</div>
+    </div>
+    <div class="bracket-tabs" id="brTabs">
+      <button class="brtab on" data-r="R32" onclick="setBracketRound('R32')">R32</button>
+      <button class="brtab" data-r="R16" onclick="setBracketRound('R16')">R16</button>
+      <button class="brtab" data-r="QF" onclick="setBracketRound('QF')">QF</button>
+      <button class="brtab" data-r="SF" onclick="setBracketRound('SF')">SF</button>
+      <button class="brtab" data-r="F" onclick="setBracketRound('F')">Final</button>
+    </div>
+    <div class="bracket-scroll"><div class="bracket" id="bracketBox"></div></div>
+  </section>
+
+  <section id="predict">
+    <div class="sec-head"><h2>Predict</h2>
+      <div class="sub">Pick winners, copy your code to a teammate, climb the leaderboard</div>
+    </div>
+    <div class="pname"><label>Your name</label><input id="predNameInput" type="text" maxlength="24" placeholder="Enter your name" oninput="predName(this.value)"></div>
+    <div id="predBoard"></div>
+    <div id="predList"></div>
+  </section>
+
+  <section id="stats">
+    <div class="sec-head"><h2>Stats</h2>
+      <div class="sub">Tournament leaders, counters and the countdown &middot; tap any column to sort</div>
+    </div>
+    <div class="pulse" id="pulseBox"></div>
+    <div class="subhead">Golden Boot Race <span class="hint">top scorers</span></div>
+    <div class="boot" id="bootBox"></div>
+    <div class="subhead">Top Players by Stat <span class="hint">top 5 in each category</span></div>
+    <div class="perstat" id="perstatBox"></div>
+    <div class="subhead">Keeper Corner <span class="hint">shot-stoppers &amp; stingiest defenses</span></div>
+    <div id="keeperBox"></div>
+    <div class="subhead">Upset Tracker <span class="hint">biggest results vs the pre-match line</span></div>
+    <div id="upsetBox"></div>
+    <div class="subhead">Team Leaderboard <span class="hint">by country &middot; tap any column to sort</span></div>
+    <div class="tablewrap" id="teamTable"></div>
+    <div class="subhead">All Player Leaders <span class="hint">sortable &amp; filterable</span></div>
+    <div class="filterbar">
+      <input id="playerFilter" type="text" placeholder="Filter by player or country..." oninput="filterPlayers(this.value)">
+      <button id="p90btn" class="toggle" onclick="togglePer90()">Per 90</button>
+      <span class="meta" id="leaderMeta"></span>
+    </div>
+    <div class="tablewrap" id="leaderTable"></div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const TZ='America/Chicago', ONE_DAY=864e5, HOUR=36e5;
+const FLAGS={"Mexico": "🇲🇽", "South Korea": "🇰🇷", "Czechia": "🇨🇿", "South Africa": "🇿🇦", "Switzerland": "🇨🇭", "Canada": "🇨🇦", "Qatar": "🇶🇦", "Bosnia and Herzegovina": "🇧🇦", "Brazil": "🇧🇷", "Morocco": "🇲🇦", "Haiti": "🇭🇹", "USA": "🇺🇸", "Australia": "🇦🇺", "Turkiye": "🇹🇷", "Paraguay": "🇵🇾", "Germany": "🇩🇪", "Ivory Coast": "🇨🇮", "Ecuador": "🇪🇨", "Curacao": "🇨🇼", "Japan": "🇯🇵", "Netherlands": "🇳🇱", "Sweden": "🇸🇪", "Tunisia": "🇹🇳", "Belgium": "🇧🇪", "Egypt": "🇪🇬", "Iran": "🇮🇷", "New Zealand": "🇳🇿", "Cape Verde": "🇨🇻", "Saudi Arabia": "🇸🇦", "Spain": "🇪🇸", "Uruguay": "🇺🇾", "France": "🇫🇷", "Iraq": "🇮🇶", "Norway": "🇳🇴", "Senegal": "🇸🇳", "Algeria": "🇩🇿", "Argentina": "🇦🇷", "Austria": "🇦🇹", "Jordan": "🇯🇴", "Colombia": "🇨🇴", "DR Congo": "🇨🇩", "Portugal": "🇵🇹", "Uzbekistan": "🇺🇿", "Croatia": "🇭🇷", "Ghana": "🇬🇭", "Panama": "🇵🇦", "Scotland": "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿"};
+const NORM={"Turkey":"Turkiye","T\u00FCrkiye":"Turkiye","Cura\u00E7ao":"Curacao","United States":"USA","Korea Republic":"South Korea","Bosnia-Herzegovina":"Bosnia and Herzegovina","Congo DR":"DR Congo"};
+const norm=t=>NORM[t]||t;
+const flag=t=>FLAGS[norm(t)]||"\uD83C\uDFF3\uFE0F";
+const GROUPS_DEF={A:["Mexico","South Korea","Czechia","South Africa"],B:["Switzerland","Canada","Qatar","Bosnia and Herzegovina"],C:["Scotland","Brazil","Morocco","Haiti"],D:["USA","Australia","Turkiye","Paraguay"],E:["Germany","Ivory Coast","Ecuador","Curacao"],F:["Japan","Netherlands","Sweden","Tunisia"],G:["Belgium","Egypt","Iran","New Zealand"],H:["Spain","Uruguay","Saudi Arabia","Cape Verde"],I:["France","Senegal","Norway","Iraq"],J:["Argentina","Austria","Algeria","Jordan"],K:["Portugal","Colombia","Uzbekistan","DR Congo"],L:["England","Croatia","Ghana","Panama"]};
+const GROUP_OF={}; Object.entries(GROUPS_DEF).forEach(([g,ts])=>ts.forEach(t=>GROUP_OF[t]=g));
+const SEED_ADV={Mexico:72,"South Korea":64,Czechia:32,"South Africa":32,Switzerland:60,Canada:55,Qatar:45,"Bosnia and Herzegovina":40,Scotland:58,Brazil:82,Morocco:52,Haiti:28,USA:78,Australia:62,Turkiye:42,Paraguay:30,Germany:88,"Ivory Coast":58,Ecuador:42,Curacao:16,Japan:62,Netherlands:72,Sweden:48,Tunisia:38,Belgium:74,Egypt:46,Iran:44,"New Zealand":22,Spain:86,Uruguay:62,"Saudi Arabia":30,"Cape Verde":22,France:84,Senegal:58,Norway:40,Iraq:18,Argentina:88,Austria:52,Algeria:42,Jordan:18,Portugal:82,Colombia:62,Uzbekistan:32,"DR Congo":24,England:84,Croatia:60,Ghana:38,Panama:18};
+function tm(t,adv){return {t,p:0,w:0,d:0,l:0,gd:0,pts:0,adv,clinched:false}}
+let GROUPS=Object.entries(GROUPS_DEF).map(([g,ts])=>({g,teams:ts.map(t=>tm(t,SEED_ADV[t]||40))}));
+
+const BAKED={"events": [{"id": "760415", "utc": "2026-06-11T19:00Z", "home": "Mexico", "away": "South Africa", "group": "A", "ko": false, "state": "post", "min": "FT", "hs": 2, "as": 0, "sh_h": {"pos": "60.5", "sh": "16", "sog": "4", "cor": "3", "fouls": "12"}, "sh_a": {"pos": "39.5", "sh": "3", "sog": "2", "cor": "1", "fouls": "11"}, "ev": [{"min": "9'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "J. Quiñones"}, {"min": "17'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "T. Mokoena"}, {"min": "23'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "B. Gutiérrez"}, {"min": "49'", "t": "Red Card", "side": "a", "g": false, "og": false, "pen": false, "r": true, "y": false, "who": "S. Sithole"}, {"min": "67'", "t": "Goal - Header", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "R. Jiménez"}, {"min": "74'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "N. Sibisi"}, {"min": "84'", "t": "Red Card", "side": "a", "g": false, "og": false, "pen": false, "r": true, "y": false, "who": "T. Zwane"}, {"min": "90'+2'", "t": "Red Card", "side": "h", "g": false, "og": false, "pen": false, "r": true, "y": false, "who": "C. Montes"}]}, {"id": "760414", "utc": "2026-06-12T02:00Z", "home": "South Korea", "away": "Czechia", "group": "A", "ko": false, "state": "post", "min": "FT", "hs": 2, "as": 1, "sh_h": {"pos": "61.5", "sh": "15", "sog": "6", "cor": "4", "fouls": "9"}, "sh_a": {"pos": "38.5", "sh": "7", "sog": "4", "cor": "5", "fouls": "16"}, "ev": [{"min": "59'", "t": "Goal - Header", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "L. Krejcí"}, {"min": "67'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "H. In-Beom"}, {"min": "80'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "O. Hyeon-Gyu"}, {"min": "90'+6'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "L. Gi-Hyuk"}]}, {"id": "760416", "utc": "2026-06-12T19:00Z", "home": "Canada", "away": "Bosnia and Herzegovina", "group": "B", "ko": false, "state": "post", "min": "FT", "hs": 1, "as": 1, "sh_h": {"pos": "61.1", "sh": "13", "sog": "4", "cor": "9", "fouls": "10"}, "sh_a": {"pos": "38.9", "sh": "8", "sog": "3", "cor": "4", "fouls": "20"}, "ev": [{"min": "11'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "A. Johnston"}, {"min": "21'", "t": "Goal - Header", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "J. Lukic"}, {"min": "45'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "E. Demirovic"}, {"min": "45'+1'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "J. Lukic"}, {"min": "53'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "L. de Fougerolles"}, {"min": "78'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "C. Larin"}, {"min": "90'+3'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "N. Katic"}]}, {"id": "760417", "utc": "2026-06-13T01:00Z", "home": "USA", "away": "Paraguay", "group": "D", "ko": false, "state": "post", "min": "FT", "hs": 4, "as": 1, "sh_h": {"pos": "65.3", "sh": "16", "sog": "6", "cor": "3", "fouls": "13"}, "sh_a": {"pos": "34.7", "sh": "9", "sog": "1", "cor": "1", "fouls": "17"}, "ev": [{"min": "7'", "t": "Own Goal", "side": "h", "g": true, "og": true, "pen": false, "r": false, "y": false, "who": "D. Bobadilla"}, {"min": "10'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "J. Cáceres"}, {"min": "31'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "F. Balogun"}, {"min": "45'+5'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "F. Balogun"}, {"min": "53'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "M. Almirón"}, {"min": "59'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "T. Adams"}, {"min": "73'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "Maurício"}, {"min": "79'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "D. Gómez"}, {"min": "88'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "A. Arce"}, {"min": "90'+3'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "J. Alonso"}, {"min": "90'+8'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "G. Reyna"}]}, {"id": "760420", "utc": "2026-06-13T19:00Z", "home": "Qatar", "away": "Switzerland", "group": "B", "ko": false, "state": "post", "min": "FT", "hs": 1, "as": 1, "sh_h": {"pos": "32", "sh": "6", "sog": "3", "cor": "3", "fouls": "12"}, "sh_a": {"pos": "68", "sh": "26", "sog": "7", "cor": "10", "fouls": "11"}, "ev": [{"min": "16'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "M. Abunada"}, {"min": "17'", "t": "Penalty - Scored", "side": "a", "g": true, "og": false, "pen": true, "r": false, "y": false, "who": "B. Embolo"}, {"min": "23'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "J. Gaber"}, {"min": "42'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "D. Zakaria"}, {"min": "90'+4'", "t": "Own Goal", "side": "h", "g": true, "og": true, "pen": false, "r": false, "y": false, "who": "M. Muheim"}]}, {"id": "760419", "utc": "2026-06-13T22:00Z", "home": "Brazil", "away": "Morocco", "group": "C", "ko": false, "state": "post", "min": "FT", "hs": 1, "as": 1, "sh_h": {"pos": "51.4", "sh": "12", "sog": "5", "cor": "6", "fouls": "16"}, "sh_a": {"pos": "48.6", "sh": "14", "sog": "3", "cor": "2", "fouls": "14"}, "ev": [{"min": "21'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "I. Saibari"}, {"min": "32'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "Vinícius Júnior"}, {"min": "37'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "Casemiro"}, {"min": "43'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "R. Ibañez"}]}, {"id": "760418", "utc": "2026-06-14T01:00Z", "home": "Haiti", "away": "Scotland", "group": "C", "ko": false, "state": "post", "min": "FT", "hs": 0, "as": 1, "sh_h": {"pos": "53.7", "sh": "15", "sog": "2", "cor": "4", "fouls": "23"}, "sh_a": {"pos": "46.3", "sh": "9", "sog": "2", "cor": "3", "fouls": "21"}, "ev": [{"min": "28'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "J. McGinn"}, {"min": "39'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "J. Bellegarde"}, {"min": "46'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "A. Hickey"}, {"min": "90'+1'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "F. Curtis"}, {"min": "90'+5'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "K. McLean"}]}, {"id": "760421", "utc": "2026-06-14T04:00Z", "home": "Australia", "away": "Turkiye", "group": "D", "ko": false, "state": "post", "min": "FT", "hs": 2, "as": 0, "sh_h": {"pos": "28.4", "sh": "9", "sog": "4", "cor": "5", "fouls": "12"}, "sh_a": {"pos": "71.6", "sh": "30", "sog": "8", "cor": "8", "fouls": "4"}, "ev": [{"min": "27'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "N. Irankunda"}, {"min": "75'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "C. Metcalfe"}, {"min": "86'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "Y. Akgün"}]}, {"id": "760422", "utc": "2026-06-14T17:00Z", "home": "Germany", "away": "Curacao", "group": "E", "ko": false, "state": "post", "min": "FT", "hs": 7, "as": 1, "sh_h": {"pos": "64.6", "sh": "26", "sog": "12", "cor": "8", "fouls": "18"}, "sh_a": {"pos": "35.4", "sh": "8", "sog": "2", "cor": "1", "fouls": "11"}, "ev": [{"min": "6'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "F. Nmecha"}, {"min": "21'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "L. Comenencia"}, {"min": "38'", "t": "Goal - Header", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "N. Schlotterbeck"}, {"min": "45'+5'", "t": "Penalty - Scored", "side": "h", "g": true, "og": false, "pen": true, "r": false, "y": false, "who": "K. Havertz"}, {"min": "47'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "J. Musiala"}, {"min": "68'", "t": "Goal - Volley", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "N. Brown"}, {"min": "78'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "D. Undav"}, {"min": "88'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "K. Havertz"}]}, {"id": "760425", "utc": "2026-06-14T20:00Z", "home": "Netherlands", "away": "Japan", "group": "F", "ko": false, "state": "post", "min": "FT", "hs": 2, "as": 2, "sh_h": {"pos": "59.8", "sh": "10", "sog": "6", "cor": "5", "fouls": "7"}, "sh_a": {"pos": "40.2", "sh": "10", "sog": "3", "cor": "4", "fouls": "7"}, "ev": [{"min": "51'", "t": "Goal - Header", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "V. van Dijk"}, {"min": "57'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "K. Nakamura"}, {"min": "61'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "C. Summerville"}, {"min": "64'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "C. Summerville"}, {"min": "83'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "M. Depay"}, {"min": "89'", "t": "Goal - Header", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "D. Kamada"}, {"min": "90'+1'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "M. van de Ven"}]}, {"id": "760423", "utc": "2026-06-14T23:00Z", "home": "Ivory Coast", "away": "Ecuador", "group": "E", "ko": false, "state": "post", "min": "FT", "hs": 1, "as": 0, "sh_h": {"pos": "48.4", "sh": "15", "sog": "4", "cor": "3", "fouls": "10"}, "sh_a": {"pos": "51.6", "sh": "12", "sog": "1", "cor": "6", "fouls": "13"}, "ev": [{"min": "28'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "S. Fofana"}, {"min": "38'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "F. Kessié"}, {"min": "40'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "G. Doué"}, {"min": "73'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "J. Porozo"}, {"min": "90'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "A. Diallo"}]}, {"id": "760424", "utc": "2026-06-15T02:00Z", "home": "Sweden", "away": "Tunisia", "group": "F", "ko": false, "state": "post", "min": "FT", "hs": 5, "as": 1, "sh_h": {"pos": "48.7", "sh": "13", "sog": "7", "cor": "4", "fouls": "10"}, "sh_a": {"pos": "51.3", "sh": "6", "sog": "2", "cor": "2", "fouls": "8"}, "ev": [{"min": "7'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "Y. Ayari"}, {"min": "30'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "A. Isak"}, {"min": "43'", "t": "Goal - Header", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "O. Rekik"}, {"min": "54'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "R. Khedira"}, {"min": "59'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "V. Gyökeres"}, {"min": "84'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "M. Svanberg"}, {"min": "90'+6'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "Y. Ayari"}]}, {"id": "760428", "utc": "2026-06-15T16:00Z", "home": "Spain", "away": "Cape Verde", "group": "H", "ko": false, "state": "post", "min": "FT", "hs": 0, "as": 0, "sh_h": {"pos": "74.3", "sh": "27", "sog": "7", "cor": "11", "fouls": "10"}, "sh_a": {"pos": "25.7", "sh": "6", "sog": "1", "cor": "1", "fouls": "1"}, "ev": [{"min": "16'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "S. Lopes Cabral"}, {"min": "90'+3'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "Pedri "}]}, {"id": "760426", "utc": "2026-06-15T19:00Z", "home": "Belgium", "away": "Egypt", "group": "G", "ko": false, "state": "post", "min": "FT", "hs": 1, "as": 1, "sh_h": {"pos": "53.6", "sh": "15", "sog": "3", "cor": "2", "fouls": "15"}, "sh_a": {"pos": "46.4", "sh": "14", "sog": "3", "cor": "7", "fouls": "15"}, "ev": [{"min": "13'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "M. Attia"}, {"min": "14'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "T. Castagne"}, {"min": "20'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "E. Ashour"}, {"min": "34'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "A. Fatouh"}, {"min": "66'", "t": "Own Goal", "side": "h", "g": true, "og": true, "pen": false, "r": false, "y": false, "who": "M. Hany"}, {"min": "75'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "M. De Cuyper"}]}, {"id": "760429", "utc": "2026-06-15T22:00Z", "home": "Saudi Arabia", "away": "Uruguay", "group": "H", "ko": false, "state": "post", "min": "FT", "hs": 1, "as": 1, "sh_h": {"pos": "33.2", "sh": "7", "sog": "3", "cor": "4", "fouls": "11"}, "sh_a": {"pos": "66.8", "sh": "27", "sog": "10", "cor": "14", "fouls": "6"}, "ev": [{"min": "41'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "A. Al-Amri"}, {"min": "44'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "A. Al-Amri"}, {"min": "80'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "M. Araújo"}]}, {"id": "760427", "utc": "2026-06-16T01:00Z", "home": "Iran", "away": "New Zealand", "group": "G", "ko": false, "state": "post", "min": "FT", "hs": 2, "as": 2, "sh_h": {"pos": "48.5", "sh": "17", "sog": "4", "cor": "4", "fouls": "10"}, "sh_a": {"pos": "51.5", "sh": "14", "sog": "8", "cor": "1", "fouls": "8"}, "ev": [{"min": "7'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "E. Just"}, {"min": "32'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "R. Rezaeian"}, {"min": "54'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "E. Just"}, {"min": "64'", "t": "Goal - Header", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "M. Mohebbi"}, {"min": "89'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "E. Hajsafi"}]}, {"id": "760432", "utc": "2026-06-16T19:00Z", "home": "France", "away": "Senegal", "group": "I", "ko": false, "state": "post", "min": "FT", "hs": 3, "as": 1, "sh_h": {"pos": "53.4", "sh": "11", "sog": "8", "cor": "6", "fouls": "5"}, "sh_a": {"pos": "46.6", "sh": "6", "sog": "2", "cor": "4", "fouls": "9"}, "ev": [{"min": "66'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "K. Mbappé"}, {"min": "82'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "B. Barcola"}, {"min": "90'+5'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "I. Mbaye"}, {"min": "90'+6'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "K. Mbappé"}]}, {"id": "760430", "utc": "2026-06-16T22:00Z", "home": "Iraq", "away": "Norway", "group": "I", "ko": false, "state": "post", "min": "FT", "hs": 1, "as": 4, "sh_h": {"pos": "38.7", "sh": "11", "sog": "1", "cor": "2", "fouls": "12"}, "sh_a": {"pos": "61.3", "sh": "12", "sog": "5", "cor": "5", "fouls": "13"}, "ev": [{"min": "29'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "E. Haaland"}, {"min": "39'", "t": "Goal - Header", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "A. Hussein"}, {"min": "43'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "E. Haaland"}, {"min": "76'", "t": "Goal - Header", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "L. Østigard"}, {"min": "86'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "Z. Tahseen"}, {"min": "90'+6'", "t": "Own Goal", "side": "a", "g": true, "og": true, "pen": false, "r": false, "y": false, "who": "A. Hussein"}]}, {"id": "760433", "utc": "2026-06-17T01:00Z", "home": "Argentina", "away": "Algeria", "group": "J", "ko": false, "state": "post", "min": "FT", "hs": 3, "as": 0, "sh_h": {"pos": "47.8", "sh": "10", "sog": "6", "cor": "2", "fouls": "13"}, "sh_a": {"pos": "52.2", "sh": "7", "sog": "1", "cor": "2", "fouls": "8"}, "ev": [{"min": "17'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "L. Messi"}, {"min": "60'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "L. Messi"}, {"min": "76'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "L. Messi"}]}, {"id": "760431", "utc": "2026-06-17T04:00Z", "home": "Austria", "away": "Jordan", "group": "J", "ko": false, "state": "post", "min": "FT", "hs": 3, "as": 1, "sh_h": {"pos": "63.2", "sh": "11", "sog": "4", "cor": "4", "fouls": "12"}, "sh_a": {"pos": "36.8", "sh": "11", "sog": "4", "cor": "3", "fouls": "7"}, "ev": [{"min": "21'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "R. Schmid"}, {"min": "50'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "A. Olwan"}, {"min": "76'", "t": "Own Goal", "side": "h", "g": true, "og": true, "pen": false, "r": false, "y": false, "who": "Y. Al-Arab"}, {"min": "77'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "M. Sabitzer"}, {"min": "90'+12'", "t": "Penalty - Scored", "side": "h", "g": true, "og": false, "pen": true, "r": false, "y": false, "who": "M. Arnautovic"}]}, {"id": "760435", "utc": "2026-06-17T17:00Z", "home": "Portugal", "away": "DR Congo", "group": "K", "ko": false, "state": "post", "min": "FT", "hs": 1, "as": 1, "sh_h": {"pos": "75.4", "sh": "7", "sog": "1", "cor": "5", "fouls": "9"}, "sh_a": {"pos": "24.6", "sh": "8", "sog": "2", "cor": "4", "fouls": "10"}, "ev": [{"min": "6'", "t": "Goal - Header", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "J. Neves"}, {"min": "13'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "B. Silva"}, {"min": "32'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "C. Mbemba"}, {"min": "45'+5'", "t": "Goal - Header", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "Y. Wissa"}, {"min": "88'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "N. Semedo"}, {"min": "90'+2'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "T. Araújo"}]}, {"id": "760437", "utc": "2026-06-17T20:00Z", "home": "England", "away": "Croatia", "group": "L", "ko": false, "state": "post", "min": "FT", "hs": 4, "as": 2, "sh_h": {"pos": "51.7", "sh": "22", "sog": "11", "cor": "8", "fouls": "10"}, "sh_a": {"pos": "48.3", "sh": "10", "sog": "5", "cor": "2", "fouls": "12"}, "ev": [{"min": "12'", "t": "Penalty - Scored", "side": "h", "g": true, "og": false, "pen": true, "r": false, "y": false, "who": "H. Kane"}, {"min": "36'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "M. Baturina"}, {"min": "42'", "t": "Goal - Header", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "H. Kane"}, {"min": "45'+5'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "P. Musa"}, {"min": "47'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "J. Bellingham"}, {"min": "85'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "M. Rashford"}]}, {"id": "760434", "utc": "2026-06-17T23:00Z", "home": "Ghana", "away": "Panama", "group": "L", "ko": false, "state": "post", "min": "FT", "hs": 1, "as": 0, "sh_h": {"pos": "38", "sh": "7", "sog": "2", "cor": "2", "fouls": "9"}, "sh_a": {"pos": "62", "sh": "11", "sog": "4", "cor": "2", "fouls": "11"}, "ev": [{"min": "16'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "C. Yirenkyi"}, {"min": "72'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "C. Blackman"}, {"min": "90'+5'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "C. Yirenkyi"}, {"min": "90'+9'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "C. Harvey"}]}, {"id": "760436", "utc": "2026-06-18T02:00Z", "home": "Uzbekistan", "away": "Colombia", "group": "K", "ko": false, "state": "post", "min": "FT", "hs": 1, "as": 3, "sh_h": {"pos": "38.6", "sh": "8", "sog": "2", "cor": "3", "fouls": "14"}, "sh_a": {"pos": "61.4", "sh": "15", "sog": "4", "cor": "4", "fouls": "11"}, "ev": [{"min": "7'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "J. Mojica"}, {"min": "34'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "A. Khusanov"}, {"min": "40'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "D. Muñoz"}, {"min": "60'", "t": "Goal - Header", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "A. Fayzullaev"}, {"min": "65'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "L. Díaz"}, {"min": "90'+9'", "t": "Goal - Header", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "J. Campaz"}]}, {"id": "760438", "utc": "2026-06-18T16:00Z", "home": "Czechia", "away": "South Africa", "group": "A", "ko": false, "state": "post", "min": "FT", "hs": 1, "as": 1, "sh_h": {"pos": "38.3", "sh": "14", "sog": "3", "cor": "5", "fouls": "12"}, "sh_a": {"pos": "61.7", "sh": "17", "sog": "4", "cor": "5", "fouls": "10"}, "ev": [{"min": "6'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "M. Sadílek"}, {"min": "33'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "T. Mokoena"}, {"min": "40'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "T. Mbatha"}, {"min": "75'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "L. Krejcí"}, {"min": "83'", "t": "Penalty - Scored", "side": "a", "g": true, "og": false, "pen": true, "r": false, "y": false, "who": "T. Mokoena"}]}, {"id": "760439", "utc": "2026-06-18T19:00Z", "home": "Switzerland", "away": "Bosnia and Herzegovina", "group": "B", "ko": false, "state": "post", "min": "FT", "hs": 4, "as": 1, "sh_h": {"pos": "62.3", "sh": "13", "sog": "7", "cor": "7", "fouls": "7"}, "sh_a": {"pos": "37.7", "sh": "5", "sog": "3", "cor": "3", "fouls": "18"}, "ev": [{"min": "59'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "A. Dedic"}, {"min": "61'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "E. Dzeko"}, {"min": "65'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "N. Elvedi"}, {"min": "74'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "J. Manzambi"}, {"min": "80'", "t": "Red Card", "side": "a", "g": false, "og": false, "pen": false, "r": true, "y": false, "who": "T. Muharemovic"}, {"min": "84'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "R. Vargas"}, {"min": "90'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "J. Manzambi"}, {"min": "90'+3'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "E. Mahmic"}, {"min": "90'+7'", "t": "Penalty - Scored", "side": "h", "g": true, "og": false, "pen": true, "r": false, "y": false, "who": "G. Xhaka"}]}, {"id": "760440", "utc": "2026-06-18T22:00Z", "home": "Canada", "away": "Qatar", "group": "B", "ko": false, "state": "post", "min": "FT", "hs": 6, "as": 0, "sh_h": {"pos": "79", "sh": "32", "sog": "10", "cor": "19", "fouls": "9"}, "sh_a": {"pos": "21", "sh": "2", "sog": "0", "cor": "1", "fouls": "10"}, "ev": [{"min": "9'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "D. Cornelius"}, {"min": "16'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "C. Larin"}, {"min": "29'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "J. David"}, {"min": "33'", "t": "Red Card", "side": "a", "g": false, "og": false, "pen": false, "r": true, "y": false, "who": "H. Ahmed"}, {"min": "45'+3'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "J. David"}, {"min": "53'", "t": "Red Card", "side": "a", "g": false, "og": false, "pen": false, "r": true, "y": false, "who": "A. Madibo"}, {"min": "62'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "A. Fathy"}, {"min": "64'", "t": "Goal - Free-kick", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "N. Saliba"}, {"min": "75'", "t": "Own Goal", "side": "h", "g": true, "og": true, "pen": false, "r": false, "y": false, "who": "M. Manai"}, {"min": "90'+2'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "J. David"}]}, {"id": "760441", "utc": "2026-06-19T01:00Z", "home": "Mexico", "away": "South Korea", "group": "A", "ko": false, "state": "post", "min": "FT", "hs": 1, "as": 0, "sh_h": {"pos": "42.4", "sh": "8", "sog": "4", "cor": "1", "fouls": "9"}, "sh_a": {"pos": "57.6", "sh": "9", "sog": "2", "cor": "2", "fouls": "7"}, "ev": [{"min": "4'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "L. Kang-In"}, {"min": "50'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "L. Romo"}, {"min": "58'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "P. Seung-Ho"}]}, {"id": "760442", "utc": "2026-06-19T19:00Z", "home": "USA", "away": "Australia", "group": "D", "ko": false, "state": "post", "min": "FT", "hs": 2, "as": 0, "sh_h": {"pos": "61.9", "sh": "10", "sog": "2", "cor": "7", "fouls": "12"}, "sh_a": {"pos": "38.1", "sh": "5", "sog": "2", "cor": "4", "fouls": "16"}, "ev": [{"min": "11'", "t": "Own Goal", "side": "h", "g": true, "og": true, "pen": false, "r": false, "y": false, "who": "C. Burgess"}, {"min": "16'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "J. Bos"}, {"min": "32'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "A. Circati"}, {"min": "43'", "t": "Goal - Header", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "A. Freeman"}, {"min": "56'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "A. Robinson"}, {"min": "88'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "H. Souttar"}, {"min": "89'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "F. Balogun"}, {"min": "89'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "J. Italiano"}, {"min": "90'+3'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "C. Richards"}]}, {"id": "760445", "utc": "2026-06-19T22:00Z", "home": "Scotland", "away": "Morocco", "group": "C", "ko": false, "state": "post", "min": "FT", "hs": 0, "as": 1, "sh_h": {"pos": "41.1", "sh": "6", "sog": "0", "cor": "2", "fouls": "11"}, "sh_a": {"pos": "58.9", "sh": "12", "sog": "2", "cor": "5", "fouls": "8"}, "ev": [{"min": "2'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "I. Saibari"}, {"min": "23'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "I. Diop"}, {"min": "65'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "A. Robertson"}]}, {"id": "760444", "utc": "2026-06-20T00:30Z", "home": "Brazil", "away": "Haiti", "group": "C", "ko": false, "state": "post", "min": "FT", "hs": 3, "as": 0, "sh_h": {"pos": "56.7", "sh": "8", "sog": "5", "cor": "4", "fouls": "13"}, "sh_a": {"pos": "43.3", "sh": "7", "sog": "3", "cor": "4", "fouls": "14"}, "ev": [{"min": "4'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "C. Arcus"}, {"min": "23'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "M. Cunha"}, {"min": "36'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "M. Cunha"}, {"min": "45'+3'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "Vinícius Júnior"}, {"min": "45'+4'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "F. Pierrot"}, {"min": "65'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "D. Santos"}, {"min": "72'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "D. Jean Jacques"}]}, {"id": "760443", "utc": "2026-06-20T03:00Z", "home": "Turkiye", "away": "Paraguay", "group": "D", "ko": false, "state": "post", "min": "FT", "hs": 0, "as": 1, "sh_h": {"pos": "78.5", "sh": "32", "sog": "5", "cor": "12", "fouls": "14"}, "sh_a": {"pos": "21.5", "sh": "7", "sog": "2", "cor": "0", "fouls": "15"}, "ev": [{"min": "2'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "M. Galarza"}, {"min": "4'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "M. Galarza"}, {"min": "45'+3'", "t": "Red Card", "side": "a", "g": false, "og": false, "pen": false, "r": true, "y": false, "who": "M. Almirón"}, {"min": "63'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": ""}, {"min": "71'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "E. Elmali"}]}, {"id": "760447", "utc": "2026-06-20T17:00Z", "home": "Netherlands", "away": "Sweden", "group": "F", "ko": false, "state": "post", "min": "FT", "hs": 5, "as": 1, "sh_h": {"pos": "50.9", "sh": "10", "sog": "7", "cor": "2", "fouls": "9"}, "sh_a": {"pos": "49.1", "sh": "16", "sog": "8", "cor": "5", "fouls": "12"}, "ev": [{"min": "5'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "B. Brobbey"}, {"min": "17'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "B. Brobbey"}, {"min": "47'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "C. Gakpo"}, {"min": "53'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "G. Gudmundsson"}, {"min": "54'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "C. Gakpo"}, {"min": "59'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "A. Elanga"}, {"min": "75'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "Y. Ayari"}, {"min": "80'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "L. Bergvall"}, {"min": "89'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "C. Summerville"}]}, {"id": "760448", "utc": "2026-06-20T20:00Z", "home": "Germany", "away": "Ivory Coast", "group": "E", "ko": false, "state": "post", "min": "FT", "hs": 2, "as": 1, "sh_h": {"pos": "59.5", "sh": "16", "sog": "7", "cor": "8", "fouls": "5"}, "sh_a": {"pos": "40.5", "sh": "9", "sog": "2", "cor": "3", "fouls": "7"}, "ev": [{"min": "30'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "F. Kessié"}, {"min": "68'", "t": "Goal - Volley", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "D. Undav"}, {"min": "90'+4'", "t": "Goal", "side": "h", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "D. Undav"}]}, {"id": "760446", "utc": "2026-06-21T00:00Z", "home": "Ecuador", "away": "Curacao", "group": "E", "ko": false, "state": "post", "min": "FT", "hs": 0, "as": 0, "sh_h": {"pos": "74.6", "sh": "27", "sog": "15", "cor": "9", "fouls": "7"}, "sh_a": {"pos": "25.4", "sh": "10", "sog": "3", "cor": "0", "fouls": "10"}, "ev": [{"min": "38'", "t": "Yellow Card", "side": "h", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "J. Alcívar"}, {"min": "39'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "L. Bacuna"}, {"min": "53'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "J. Bacuna"}, {"min": "56'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "L. Comenencia"}, {"min": "75'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "J. Gaari"}, {"min": "90'+1'", "t": "Yellow Card", "side": "a", "g": false, "og": false, "pen": false, "r": false, "y": true, "who": "G. Kastaneer"}]}, {"id": "760449", "utc": "2026-06-21T04:00Z", "home": "Tunisia", "away": "Japan", "group": "F", "ko": false, "state": "post", "min": "FT", "hs": 0, "as": 4, "sh_h": {"pos": "37.9", "sh": "2", "sog": "0", "cor": "3", "fouls": "8"}, "sh_a": {"pos": "62.1", "sh": "11", "sog": "5", "cor": "5", "fouls": "15"}, "ev": [{"min": "4'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "D. Kamada"}, {"min": "31'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "A. Ueda"}, {"min": "69'", "t": "Goal", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "J. Ito"}, {"min": "83'", "t": "Goal - Header", "side": "a", "g": true, "og": false, "pen": false, "r": false, "y": false, "who": "A. Ueda"}]}, {"id": "760453", "utc": "2026-06-21T16:00Z", "home": "Spain", "away": "Saudi Arabia", "group": "H", "ko": false, "state": "pre", "min": "Scheduled", "ph": 85, "pa": 6, "pd": 9, "ou": 3.5, "book": "DraftKings"}, {"id": "760451", "utc": "2026-06-21T19:00Z", "home": "Belgium", "away": "Iran", "group": "G", "ko": false, "state": "pre", "min": "Scheduled", "ph": 66, "pa": 14, "pd": 20, "ou": 2.5, "book": "DraftKings"}, {"id": "760450", "utc": "2026-06-21T22:00Z", "home": "Uruguay", "away": "Cape Verde", "group": "H", "ko": false, "state": "pre", "min": "Scheduled", "ph": 65, "pa": 13, "pd": 22, "ou": 2.5, "book": "DraftKings"}, {"id": "760452", "utc": "2026-06-22T01:00Z", "home": "New Zealand", "away": "Egypt", "group": "G", "ko": false, "state": "pre", "min": "Scheduled", "ph": 17, "pa": 59, "pd": 24, "ou": 2.5, "book": "DraftKings"}, {"id": "760456", "utc": "2026-06-22T17:00Z", "home": "Argentina", "away": "Austria", "group": "J", "ko": false, "state": "pre", "min": "Scheduled", "ph": 60, "pa": 16, "pd": 24, "ou": 2.5, "book": "DraftKings"}, {"id": "760457", "utc": "2026-06-22T21:00Z", "home": "France", "away": "Iraq", "group": "I", "ko": false, "state": "pre", "min": "Scheduled", "ph": 88, "pa": 4, "pd": 8, "ou": 3.5, "book": "DraftKings"}, {"id": "760454", "utc": "2026-06-23T00:00Z", "home": "Norway", "away": "Senegal", "group": "I", "ko": false, "state": "pre", "min": "Scheduled", "ph": 41, "pa": 32, "pd": 27, "ou": 2.5, "book": "DraftKings"}, {"id": "760455", "utc": "2026-06-23T03:00Z", "home": "Jordan", "away": "Algeria", "group": "J", "ko": false, "state": "pre", "min": "Scheduled", "ph": 18, "pa": 60, "pd": 22, "ou": 2.5, "book": "DraftKings"}, {"id": "760461", "utc": "2026-06-23T17:00Z", "home": "Portugal", "away": "Uzbekistan", "group": "K", "ko": false, "state": "pre", "min": "Scheduled", "ph": 78, "pa": 9, "pd": 13, "ou": 2.5, "book": "DraftKings"}, {"id": "760458", "utc": "2026-06-23T20:00Z", "home": "England", "away": "Ghana", "group": "L", "ko": false, "state": "pre", "min": "Scheduled", "ph": 77, "pa": 8, "pd": 15, "ou": 2.5, "book": "DraftKings"}, {"id": "760460", "utc": "2026-06-23T23:00Z", "home": "Panama", "away": "Croatia", "group": "L", "ko": false, "state": "pre", "min": "Scheduled", "ph": 16, "pa": 61, "pd": 23, "ou": 2.5, "book": "DraftKings"}, {"id": "760459", "utc": "2026-06-24T02:00Z", "home": "Colombia", "away": "DR Congo", "group": "K", "ko": false, "state": "pre", "min": "Scheduled", "ph": 62, "pa": 16, "pd": 22, "ou": 2.5, "book": "DraftKings"}, {"id": "760462", "utc": "2026-06-24T19:00Z", "home": "Bosnia and Herzegovina", "away": "Qatar", "group": "B", "ko": false, "state": "pre", "min": "Scheduled", "ph": 65, "pa": 16, "pd": 19, "ou": 2.5, "book": "DraftKings"}, {"id": "760463", "utc": "2026-06-24T19:00Z", "home": "Switzerland", "away": "Canada", "group": "B", "ko": false, "state": "pre", "min": "Scheduled", "ph": 39, "pa": 31, "pd": 30, "ou": 2.5, "book": "DraftKings"}, {"id": "760464", "utc": "2026-06-24T22:00Z", "home": "Morocco", "away": "Haiti", "group": "C", "ko": false, "state": "pre", "min": "Scheduled", "ph": 79, "pa": 8, "pd": 13, "ou": 2.5, "book": "DraftKings"}, {"id": "760465", "utc": "2026-06-24T22:00Z", "home": "Scotland", "away": "Brazil", "group": "C", "ko": false, "state": "pre", "min": "Scheduled", "ph": 15, "pa": 67, "pd": 18, "ou": 2.5, "book": "DraftKings"}, {"id": "760467", "utc": "2026-06-25T01:00Z", "home": "Czechia", "away": "Mexico", "group": "A", "ko": false, "state": "pre", "min": "Scheduled", "ph": 28, "pa": 48, "pd": 24, "ou": 2.5, "book": "DraftKings"}, {"id": "760466", "utc": "2026-06-25T01:00Z", "home": "South Africa", "away": "South Korea", "group": "A", "ko": false, "state": "pre", "min": "Scheduled", "ph": 18, "pa": 58, "pd": 24, "ou": 2.5, "book": "DraftKings"}, {"id": "760473", "utc": "2026-06-25T20:00Z", "home": "Curacao", "away": "Ivory Coast", "group": "E", "ko": false, "state": "pre", "min": "Scheduled", "ph": 7, "pa": 82, "pd": 11, "ou": 3.5, "book": "DraftKings"}, {"id": "760468", "utc": "2026-06-25T20:00Z", "home": "Ecuador", "away": "Germany", "group": "E", "ko": false, "state": "pre", "min": "Scheduled", "ph": 28, "pa": 48, "pd": 24, "ou": 2.5, "book": "DraftKings"}, {"id": "760471", "utc": "2026-06-25T23:00Z", "home": "Japan", "away": "Sweden", "group": "F", "ko": false, "state": "pre", "min": "Scheduled", "ph": 46, "pa": 26, "pd": 28, "ou": 2.5, "book": "DraftKings"}, {"id": "760472", "utc": "2026-06-25T23:00Z", "home": "Tunisia", "away": "Netherlands", "group": "F", "ko": false, "state": "pre", "min": "Scheduled", "ph": 7, "pa": 82, "pd": 11, "ou": 3.5, "book": "DraftKings"}, {"id": "760469", "utc": "2026-06-26T02:00Z", "home": "Paraguay", "away": "Australia", "group": "D", "ko": false, "state": "pre", "min": "Scheduled", "ph": 33, "pa": 25, "pd": 42, "ou": 1.5, "book": "DraftKings"}, {"id": "760470", "utc": "2026-06-26T02:00Z", "home": "Turkiye", "away": "USA", "group": "D", "ko": false, "state": "pre", "min": "Scheduled", "ph": 29, "pa": 47, "pd": 24, "ou": 2.5, "book": "DraftKings"}, {"id": "760475", "utc": "2026-06-26T19:00Z", "home": "Norway", "away": "France", "group": "I", "ko": false, "state": "pre", "min": "Scheduled", "ph": 24, "pa": 52, "pd": 24, "ou": 2.5, "book": "DraftKings"}, {"id": "760474", "utc": "2026-06-26T19:00Z", "home": "Senegal", "away": "Iraq", "group": "I", "ko": false, "state": "pre", "min": "Scheduled", "ph": 72, "pa": 11, "pd": 17, "ou": 2.5, "book": "DraftKings"}, {"id": "760478", "utc": "2026-06-27T00:00Z", "home": "Cape Verde", "away": "Saudi Arabia", "group": "H", "ko": false, "state": "pre", "min": "Scheduled", "ph": 35, "pa": 39, "pd": 26, "ou": 2.5, "book": "DraftKings"}, {"id": "760479", "utc": "2026-06-27T00:00Z", "home": "Uruguay", "away": "Spain", "group": "H", "ko": false, "state": "pre", "min": "Scheduled", "ph": 17, "pa": 61, "pd": 22, "ou": 2.5, "book": "DraftKings"}, {"id": "760476", "utc": "2026-06-27T03:00Z", "home": "Egypt", "away": "Iran", "group": "G", "ko": false, "state": "pre", "min": "Scheduled", "ph": 45, "pa": 25, "pd": 30, "ou": 2.5, "book": "DraftKings"}, {"id": "760477", "utc": "2026-06-27T03:00Z", "home": "New Zealand", "away": "Belgium", "group": "G", "ko": false, "state": "pre", "min": "Scheduled", "ph": 9, "pa": 76, "pd": 15, "ou": 2.5, "book": "DraftKings"}, {"id": "760480", "utc": "2026-06-27T21:00Z", "home": "Croatia", "away": "Ghana", "group": "L", "ko": false, "state": "pre", "min": "Scheduled", "ph": 58, "pa": 18, "pd": 24, "ou": 2.5, "book": "DraftKings"}, {"id": "760485", "utc": "2026-06-27T21:00Z", "home": "Panama", "away": "England", "group": "L", "ko": false, "state": "pre", "min": "Scheduled", "ph": 11, "pa": 76, "pd": 13, "ou": 2.5, "book": "DraftKings"}, {"id": "760481", "utc": "2026-06-27T23:30Z", "home": "Colombia", "away": "Portugal", "group": "K", "ko": false, "state": "pre", "min": "Scheduled", "ph": 27, "pa": 46, "pd": 27, "ou": 2.5, "book": "DraftKings"}, {"id": "760482", "utc": "2026-06-27T23:30Z", "home": "DR Congo", "away": "Uzbekistan", "group": "K", "ko": false, "state": "pre", "min": "Scheduled", "ph": 45, "pa": 29, "pd": 26, "ou": 2.5, "book": "DraftKings"}, {"id": "760484", "utc": "2026-06-28T02:00Z", "home": "Algeria", "away": "Austria", "group": "J", "ko": false, "state": "pre", "min": "Scheduled", "ph": 33, "pa": 37, "pd": 30, "ou": 2.5, "book": "DraftKings"}, {"id": "760483", "utc": "2026-06-28T02:00Z", "home": "Jordan", "away": "Argentina", "group": "J", "ko": false, "state": "pre", "min": "Scheduled", "ph": 8, "pa": 79, "pd": 13, "ou": 2.5, "book": "DraftKings"}, {"id": "760486", "utc": "2026-06-28T19:00Z", "home": "Group A 2nd Place", "away": "Group B 2nd Place", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760487", "utc": "2026-06-29T17:00Z", "home": "Group C Winner", "away": "Group F 2nd Place", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760489", "utc": "2026-06-29T20:30Z", "home": "Germany", "away": "Third Place Group A/B/C/D/F", "group": "E", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760488", "utc": "2026-06-30T01:00Z", "home": "Group F Winner", "away": "Group C 2nd Place", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760490", "utc": "2026-06-30T17:00Z", "home": "Group E 2nd Place", "away": "Group I 2nd Place", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760492", "utc": "2026-06-30T21:00Z", "home": "Group I Winner", "away": "Third Place Group C/D/F/G/H", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760491", "utc": "2026-07-01T01:00Z", "home": "Mexico", "away": "Third Place Group C/E/F/H/I", "group": "A", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760495", "utc": "2026-07-01T16:00Z", "home": "Group L Winner", "away": "Third Place Group E/H/I/J/K", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760493", "utc": "2026-07-01T20:00Z", "home": "Group G Winner", "away": "Third Place Group A/E/H/I/J", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760494", "utc": "2026-07-02T00:00Z", "home": "USA", "away": "Third Place Group B/E/F/I/J", "group": "D", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760497", "utc": "2026-07-02T19:00Z", "home": "Group H Winner", "away": "Group J 2nd Place", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760496", "utc": "2026-07-02T23:00Z", "home": "Group K 2nd Place", "away": "Group L 2nd Place", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760498", "utc": "2026-07-03T03:00Z", "home": "Group B Winner", "away": "Third Place Group E/F/G/I/J", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760499", "utc": "2026-07-03T18:00Z", "home": "Group D 2nd Place", "away": "Group G 2nd Place", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760500", "utc": "2026-07-03T22:00Z", "home": "Group J Winner", "away": "Group H 2nd Place", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760501", "utc": "2026-07-04T01:30Z", "home": "Group K Winner", "away": "Third Place Group D/E/I/J/L", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760502", "utc": "2026-07-04T17:00Z", "home": "Round of 32 1 Winner", "away": "Round of 32 3 Winner", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760503", "utc": "2026-07-04T21:00Z", "home": "Round of 32 2 Winner", "away": "Round of 32 5 Winner", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760504", "utc": "2026-07-05T20:00Z", "home": "Round of 32 4 Winner", "away": "Round of 32 6 Winner", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760505", "utc": "2026-07-06T00:00Z", "home": "Round of 32 7 Winner", "away": "Round of 32 8 Winner", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760506", "utc": "2026-07-06T19:00Z", "home": "Round of 32 11 Winner", "away": "Round of 32 12 Winner", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760507", "utc": "2026-07-07T00:00Z", "home": "Round of 32 9 Winner", "away": "Round of 32 10 Winner", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760509", "utc": "2026-07-07T16:00Z", "home": "Round of 32 14 Winner", "away": "Round of 32 16 Winner", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760508", "utc": "2026-07-07T20:00Z", "home": "Round of 32 13 Winner", "away": "Round of 32 15 Winner", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760510", "utc": "2026-07-09T20:00Z", "home": "Round of 16 1 Winner", "away": "Round of 16 2 Winner", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760511", "utc": "2026-07-10T19:00Z", "home": "Round of 16 5 Winner", "away": "Round of 16 6 Winner", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760512", "utc": "2026-07-11T21:00Z", "home": "Round of 16 3 Winner", "away": "Round of 16 4 Winner", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}, {"id": "760513", "utc": "2026-07-12T01:00Z", "home": "Round of 16 7 Winner", "away": "Round of 16 8 Winner", "group": "", "ko": true, "state": "pre", "min": "Scheduled"}], "fetched": "2026-06-21T15:42:23.394042Z"};
+let DATA={events:BAKED.events, fetched:BAKED.fetched};
+const ODDS={"760415": {"h": 67, "d": 22, "a": 11}, "760414": {"h": 37, "d": 31, "a": 32}, "760416": {"h": 51, "d": 28, "a": 21}, "760417": {"h": 47, "d": 30, "a": 23}, "760420": {"h": 6, "d": 14, "a": 80}, "760419": {"h": 57, "d": 26, "a": 17}, "760418": {"h": 18, "d": 23, "a": 59}, "760421": {"h": 18, "d": 27, "a": 55}, "760422": {"h": 91, "d": 6, "a": 3}, "760425": {"h": 47, "d": 28, "a": 25}, "760423": {"h": 30, "d": 32, "a": 38}, "760424": {"h": 50, "d": 29, "a": 21}, "760428": {"h": 87, "d": 8, "a": 5}, "760426": {"h": 63, "d": 22, "a": 15}, "760429": {"h": 13, "d": 23, "a": 64}, "760427": {"h": 51, "d": 28, "a": 21}, "760432": {"h": 64, "d": 21, "a": 15}, "760430": {"h": 7, "d": 15, "a": 78}, "760433": {"h": 62, "d": 23, "a": 15}, "760431": {"h": 69, "d": 20, "a": 11}, "760435": {"h": 75, "d": 17, "a": 8}, "760437": {"h": 58, "d": 25, "a": 17}, "760434": {"h": 41, "d": 30, "a": 29}, "760436": {"h": 9, "d": 17, "a": 74}, "760438": {"h": 51, "d": 29, "a": 20}, "760439": {"h": 61, "d": 23, "a": 16}, "760440": {"h": 76, "d": 16, "a": 8}, "760441": {"h": 48, "d": 30, "a": 22}, "760442": {"h": 61, "d": 23, "a": 16}, "760445": {"h": 18, "d": 26, "a": 56}, "760444": {"h": 86, "d": 9, "a": 5}, "760443": {"h": 46, "d": 29, "a": 25}, "760447": {"h": 56, "d": 24, "a": 20}, "760448": {"h": 65, "d": 20, "a": 15}, "760446": {"h": 83, "d": 11, "a": 6}, "760449": {"h": 11, "d": 22, "a": 67}, "760453": {"h": 87, "d": 8, "a": 5}, "760451": {"h": 68, "d": 20, "a": 12}, "760450": {"h": 67, "d": 23, "a": 10}, "760452": {"h": 16, "d": 24, "a": 60}, "760456": {"h": 61, "d": 24, "a": 15}, "760457": {"h": 89, "d": 8, "a": 3}, "760454": {"h": 42, "d": 27, "a": 31}, "760455": {"h": 16, "d": 23, "a": 61}, "760461": {"h": 79, "d": 14, "a": 7}, "760458": {"h": 78, "d": 15, "a": 7}, "760460": {"h": 15, "d": 23, "a": 62}, "760459": {"h": 63, "d": 23, "a": 14}, "760462": {"h": 66, "d": 19, "a": 15}, "760463": {"h": 39, "d": 31, "a": 30}, "760464": {"h": 80, "d": 14, "a": 6}, "760465": {"h": 14, "d": 18, "a": 68}, "760467": {"h": 26, "d": 25, "a": 49}, "760466": {"h": 17, "d": 24, "a": 59}, "760473": {"h": 5, "d": 12, "a": 83}, "760468": {"h": 27, "d": 24, "a": 49}, "760471": {"h": 48, "d": 29, "a": 23}, "760472": {"h": 5, "d": 12, "a": 83}, "760469": {"h": 33, "d": 43, "a": 24}, "760470": {"h": 28, "d": 24, "a": 48}, "760475": {"h": 22, "d": 25, "a": 53}, "760474": {"h": 74, "d": 17, "a": 9}, "760478": {"h": 37, "d": 25, "a": 38}, "760479": {"h": 16, "d": 22, "a": 62}, "760476": {"h": 46, "d": 30, "a": 24}, "760477": {"h": 7, "d": 15, "a": 78}, "760480": {"h": 59, "d": 25, "a": 16}, "760485": {"h": 9, "d": 14, "a": 77}, "760481": {"h": 26, "d": 27, "a": 47}, "760482": {"h": 46, "d": 26, "a": 28}, "760484": {"h": 31, "d": 31, "a": 38}, "760483": {"h": 7, "d": 13, "a": 80}};
+
+// ---------- ESPN (single source: scoreboard feed) ----------
+const SB='https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
+let liveTimer=null;
+const ml2p=m=>{m=+m; return m<0?(-m)/(-m+100):100/(m+100);};
+
+function processEvents(events){
+  return (events||[]).map(e=>{
+    const c=e.competitions[0], cs=c.competitors;
+    const H=cs.find(x=>x.homeAway==='home'), A=cs.find(x=>x.homeAway==='away'); if(!H||!A) return null;
+    const home=norm(H.team.displayName), away=norm(A.team.displayName);
+    const st=e.status.type, state=st.state;
+    const ko=!(GROUP_OF[home] && GROUP_OF[away] && GROUP_OF[home]===GROUP_OF[away]);
+    const m={id:e.id, utc:e.date, home, away, group:GROUP_OF[home]||'', ko, state, min:st.shortDetail||''};
+    if(state==='in'||state==='post'){
+      m.hs=+(H.score||0); m.as=+(A.score||0);
+      const grab=comp=>{const fmap={};(comp.statistics||[]).forEach(s=>fmap[s.abbreviation]=s.displayValue);
+        return {pos:fmap.PP,sh:fmap.SHOT,sog:fmap.SOG,cor:fmap.CW,fouls:fmap.FC};};
+      m.sh_h=grab(H); m.sh_a=grab(A);
+      const idmap={}; idmap[H.id]='h'; idmap[A.id]='a'; idmap[H.team.id]='h'; idmap[A.team.id]='a';
+      m.ev=(c.details||[]).map(dt=>{const ai=(dt.athletesInvolved||[])[0];
+        return {min:(dt.clock||{}).displayValue||'', t:(dt.type||{}).text||'', side:idmap[(dt.team||{}).id]||'',
+          g:!!dt.scoringPlay, og:!!dt.ownGoal, pen:!!dt.penaltyKick, r:!!dt.redCard, y:!!dt.yellowCard,
+          who:ai?(ai.shortName||ai.displayName||''):''};});
+    }
+    if(state==='pre'){
+      const o=(c.odds||[])[0];
+      if(o && o.details && o.drawOdds && o.drawOdds.moneyLine!=null){
+        const parts=String(o.details).split(/\s+/), favAbbr=parts[0], favML=parseFloat(parts[parts.length-1]);
+        if(!isNaN(favML)){
+          const favp=ml2p(favML), drawp=ml2p(o.drawOdds.moneyLine), dogp=Math.max(0.02,1.06-favp-drawp);
+          const s=favp+drawp+dogp, fav=Math.round(favp/s*100), draw=Math.round(drawp/s*100), dog=100-fav-draw;
+          const favHome=(favAbbr===H.team.abbreviation);
+          m.ph=favHome?fav:dog; m.pa=favHome?dog:fav; m.pd=draw; m.ou=o.overUnder; m.book=(o.provider||{}).name||'';
+        }
+      }
+    }
+    return m;
+  }).filter(Boolean).sort((a,b)=>new Date(a.utc)-new Date(b.utc));
+}
+async function fetchSB(range){
+  const r=await fetch(SB+(range?('?dates='+range):'')); if(!r.ok) throw new Error('espn '+r.status);
+  return (await r.json()).events||[];
+}
+function mergeById(base,upd){const map={};base.forEach(e=>map[e.id]=e);upd.forEach(e=>map[e.id]=e);
+  return Object.values(map).sort((a,b)=>new Date(a.utc)-new Date(b.utc));}
+async function loadSchedule(force){
+  try{
+    if(window.storage && !force){ try{const c=await window.storage.get('wc_espn');
+      if(c&&c.value){const cached=JSON.parse(c.value); if(Date.now()-new Date(cached.fetched).getTime()<HOUR){DATA=cached; paint();} }}catch(e){} }
+    const raw=await fetchSB('20260611-20260719');
+    if(raw.length){ DATA={events:processEvents(raw), fetched:new Date().toISOString()}; paint();
+      if(window.storage){try{await window.storage.set('wc_espn',JSON.stringify(DATA));}catch(e){}} }
+  }catch(e){ console.warn('schedule load failed, using baked data',e); }
+}
+const liveCount=()=>DATA.events.filter(x=>x.state==='in').length;
+async function liveTick(){
+  try{ const raw=await fetchSB(''); if(raw.length){ DATA.events=mergeById(DATA.events,processEvents(raw)); DATA.fetched=new Date().toISOString(); paint(); } }
+  catch(e){ console.warn('live tick',e); }
+  finally{ fetchLeaders(); clearTimeout(liveTimer); liveTimer=setTimeout(liveTick, liveCount()>0?30000:120000); }
+}
+function forceRefresh(){const b=document.getElementById('refreshBtn');b.disabled=true;b.classList.add('spinning');
+  loadSchedule(true).finally(()=>{b.disabled=false;b.classList.remove('spinning');});}
+
+// ---------- standings ----------
+function recomputeStandings(){
+  const idx={}; GROUPS.forEach(gr=>gr.teams.forEach(t=>{t.p=t.w=t.d=t.l=t.gd=t.pts=0; idx[t.t]=t;}));
+  DATA.events.filter(e=>e.state==='post'&&!e.ko).forEach(r=>{
+    const h=idx[r.home], a=idx[r.away]; if(!h||!a) return;
+    h.p++;a.p++;h.gd+=r.hs-r.as;a.gd+=r.as-r.hs;
+    if(r.hs>r.as){h.w++;h.pts+=3;a.l++;}else if(r.hs<r.as){a.w++;a.pts+=3;h.l++;}else{h.d++;a.d++;h.pts++;a.pts++;}
+  });
+}
+
+// ---------- rendering ----------
+function fmtDayKey(d){return new Intl.DateTimeFormat('en-US',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(d);}
+function dayNum(d){return new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(d);} // YYYY-MM-DD, sortable
+function dayLabel(d){const today=fmtDayKey(new Date()),tmw=fmtDayKey(new Date(Date.now()+ONE_DAY)),ystd=fmtDayKey(new Date(Date.now()-ONE_DAY)),k=fmtDayKey(d);
+  if(k===today)return"Today";if(k===tmw)return"Tomorrow";if(k===ystd)return"Yesterday";
+  return new Intl.DateTimeFormat('en-US',{timeZone:TZ,weekday:'long',month:'short',day:'numeric'}).format(d);}
+function fmtTime(d){return new Intl.DateTimeFormat('en-US',{timeZone:TZ,hour:'numeric',minute:'2-digit'}).format(d);}
+
+function oddsBlock(m){
+  if(m.ph==null) return '<div class="note" style="margin-top:9px">Line not posted yet</div>';
+  return '<div class="odds"><div class="oddsbar"><i class="h" style="width:'+m.ph+'%"></i><i class="d" style="width:'+m.pd+'%"></i><i class="a" style="width:'+m.pa+'%"></i></div>'
+   +'<div class="oddslabels"><div class="seg l"><span class="tag">Home</span><b>'+m.ph+'%</b></div>'
+   +'<div class="seg"><span class="tag">Draw</span><b>'+m.pd+'%</b></div>'
+   +'<div class="seg r"><span class="tag">Away</span><b>'+m.pa+'%</b></div></div>'
+   +'<div class="book">'+(m.book||'DraftKings')+(m.ou!=null?' \u00B7 O/U '+m.ou:'')+'</div></div>';
+}
+const sv=x=>(x==null||x==='')?'-':x;
+function statStrip(m){
+  if(!m.sh_h) return '';
+  const ph=parseFloat(m.sh_h.pos)||0, pa=parseFloat(m.sh_a.pos)||0, tot=ph+pa||1;
+  const row=(lbl,k,suf)=>'<div class="strow"><span class="sv">'+sv(m.sh_h[k])+(suf||'')+'</span><span class="sl">'+lbl+'</span><span class="sv">'+sv(m.sh_a[k])+(suf||'')+'</span></div>';
+  return '<div class="stats">'+row('Possession','pos','%')
+    +'<div class="statbar"><i style="width:'+(ph/tot*100)+'%"></i></div>'
+    +row('Shots','sh')+row('On target','sog')+row('Corners','cor')+row('Fouls','fouls')+'</div>';
+}
+function timeline(m){
+  if(!m.ev||!m.ev.length) return '';
+  return '<div class="tl">'+m.ev.map(x=>{
+    const ic = x.g?'\u26BD':(x.r?'\uD83D\uDFE5':(x.y?'\uD83D\uDFE8':'\u2022'));
+    const extra = x.g?(x.pen?' (P)':(x.og?' (OG)':'')):'';
+    return '<div class="evrow '+(x.side==='a'?'ea':'eh')+'"><span class="emin">'+x.min+'</span><span class="eic">'+ic+'</span><span class="ewho">'+((x.who||x.t)+extra)+'</span></div>';
+  }).join('')+'</div>';
+}
+function teamRow(name,score,win,lose){
+  return '<div class="team-row '+(win?'winner':'')+' '+(lose?'dim':'')+'"><span class="flag">'+flag(name)+'</span><span class="nm">'+norm(name)+'</span><span class="sc">'+(score===''?'':score)+'</span></div>';
+}
+function card(o){
+  const d=new Date(o.utc), live=o.state==='in', done=o.state==='post', showScore=live||done;
+  const hw=done&&o.hs>o.as, aw=done&&o.as>o.hs;
+  let timeHTML = live?('<span class="badge-live"><i></i>LIVE'+(o.min?' '+o.min:'')+'</span>')
+    : done?('<span class="time final">'+(o.min||'FT')+'</span>')
+    : ('<span class="time">'+fmtTime(d)+'</span>');
+  const hasDetail = showScore && (o.sh_h || (o.ev&&o.ev.length));
+  const detail = hasDetail ? '<details class="more"'+(live?' open':'')+'><summary>Stats &amp; timeline</summary>'+statStrip(o)+timeline(o)+'</details>' : '';
+  return '<div class="mcard'+(live?' live':'')+'"><div class="mtop"><span class="stage">'+(o.ko?'Knockout':('Group '+(o.group||'?')))+'</span>'+timeHTML+'</div>'
+   +teamRow(o.home,showScore?o.hs:'',hw,aw)+teamRow(o.away,showScore?o.as:'',aw,hw)
+   +(showScore?'':oddsBlock(o))+detail+'</div>';
+}
+function renderMatches(){
+  const items=[...DATA.events].sort((a,b)=>new Date(a.utc)-new Date(b.utc));
+  const todayN=dayNum(new Date());
+  const past={}, cur={};
+  items.forEach(m=>{const k=dayNum(new Date(m.utc)); const b=(k<todayN?past:cur); (b[k]=b[k]||[]).push(m);});
+  const dayBlock=(days,k)=>'<div class="daygroup"><div class="daylabel">'+dayLabel(new Date(days[k][0].utc))+'<span></span></div><div class="matches-grid">'+days[k].map(card).join('')+'</div></div>';
+  let html='';
+  const pastKeys=Object.keys(past).sort();
+  if(pastKeys.length){
+    const n=pastKeys.reduce((s,k)=>s+past[k].length,0);
+    html+='<details class="completed"><summary>Completed Games <span class="cnt">'+n+' played</span></summary><div class="inner">'+pastKeys.map(k=>dayBlock(past,k)).join('')+'</div></details>';
+  }
+  const curKeys=Object.keys(cur).sort();
+  html+=curKeys.map(k=>dayBlock(cur,k)).join('');
+  document.getElementById('matchesBox').innerHTML=html||'<div class="note">No matches.</div>';
+}
+function statusBadge(k){
+  if(k==='in')  return '<span class="st st-in">IN</span>';
+  if(k==='out') return '<span class="st st-out">OUT</span>';
+  if(k==='in3') return '<span class="st st-in3" title="Provisionally through via best 3rd place">IN*</span>';
+  if(k==='out3')return '<span class="st st-out" title="3rd place, outside the best 8 (provisional)">OUT*</span>';
+  return '<span class="st st-live">live</span>';
+}
+function renderGroups(){
+  recomputeStandings();
+  const sorted=GROUPS.map(g=>({g:g.g, teams:[...g.teams].sort((a,b)=> b.pts-a.pts || b.gd-a.gd || b.w-a.w)}));
+  const thirds=sorted.map(s=>({g:s.g,t:s.teams[2]})).filter(x=>x.t).map(x=>({g:x.g,name:x.t.t,p:x.t.p,pts:x.t.pts,gd:x.t.gd}));
+  thirds.sort((a,b)=> b.pts-a.pts || b.gd-a.gd);
+  const top8=new Set(thirds.slice(0,8).map(x=>x.g));
+  const allComplete=sorted.every(s=>s.teams.every(t=>t.p>=3));
+  const remOf=names=>DATA.events.filter(e=>e.state!=='post'&&!e.ko&&names.has(e.home)&&names.has(e.away)).map(e=>[e.home,e.away]);
+  function statuses(s){
+    const teams=s.teams, N=teams.length;
+    if(teams.every(t=>t.p>=3)) return teams.map((t,i)=> i<2?'in':(i===3?'out':(top8.has(s.g)?'in3':'out3')));
+    const names=new Set(teams.map(t=>t.t)); const rem=remOf(names);
+    const idx={}; teams.forEach((t,i)=>idx[t.t]=i); const base=teams.map(t=>t.pts);
+    const k=rem.length, total=Math.pow(3,k);
+    const clinch=Array(N).fill(true), third=Array(N).fill(false);
+    for(let scn=0;scn<total;scn++){
+      const pts=base.slice(); let c=scn;
+      for(let r=0;r<k;r++){const o=c%3;c=(c/3)|0;const hi=idx[rem[r][0]],ai=idx[rem[r][1]];
+        if(o===0)pts[hi]+=3; else if(o===1){pts[hi]++;pts[ai]++;} else pts[ai]+=3;}
+      for(let x=0;x<N;x++){let ge=0,ab=0;for(let y=0;y<N;y++){if(y===x)continue;if(pts[y]>=pts[x])ge++;if(pts[y]>pts[x])ab++;}
+        if(ge>1)clinch[x]=false; if(ab<=2)third[x]=true;}
+    }
+    return teams.map((t,x)=> clinch[x]?'in':(!third[x]?'out':'alive'));
+  }
+  document.getElementById('groupsBox').innerHTML=sorted.map(s=>{
+    const sts=statuses(s), teams=s.teams; const games=Math.round(teams.reduce((a,t)=>a+t.p,0)/2);
+    const rows=teams.map((t,i)=>{const qual=i<2, st=sts[i], out=(st==='out'||st==='out3');
+      return '<tr class="'+(qual?'qual':'')+(out?' elim':'')+'"><td class="team"><span class="pos">'+(i+1)+'</span><span class="flag">'+flag(t.t)+'</span><span class="nm">'+t.t+'</span></td>'
+       +'<td>'+t.p+'</td><td>'+(t.gd>0?'+':'')+t.gd+'</td><td class="pts">'+t.pts+'</td>'
+       +'<td class="stcell">'+statusBadge(st)+'</td></tr>';}).join('');
+    return '<div class="gcard"><h3>Group '+s.g+'<span class="gp">'+games+' of 6 played</span></h3><table class="gtable"><thead><tr><th class="l">Team</th><th>P</th><th>GD</th><th>Pts</th><th class="sthead">Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  }).join('');
+  renderThirdRace(thirds, allComplete);
+}
+function renderThirdRace(thirds, complete){
+  const box=document.getElementById('thirdRace'); if(!box) return;
+  const rows=thirds.map((x,i)=>'<div class="trow '+(i<8?'tin':'tout')+(i===8?' cutline':'')+'"><span class="rk">'+(i+1)+'</span><span class="flag">'+flag(x.name)+'</span><span class="nm">'+x.name+'</span><span class="gtag">Grp '+x.g+'</span><span class="pp">'+x.pts+'<span class="u">pts</span></span><span class="gdd">'+(x.gd>0?'+':'')+x.gd+'</span></div>').join('');
+  box.innerHTML='<div class="trhead">Race for the 8 best 3rd-place spots <span class="hint">'+(complete?'final':'provisional \u2014 updates as games finish')+'</span></div><div class="trlist">'+rows+'</div>';
+}
+const KNOWN=new Set(Object.values(GROUPS_DEF).flat());
+function koLabel(s){ if(!s) return 'TBD'; let m;
+  if(m=s.match(/^Group (\w) Winner$/)) return 'Winner '+m[1];
+  if(m=s.match(/^Group (\w) 2nd Place$/)) return '2nd '+m[1];
+  if(m=s.match(/^Third Place Group (.+)$/)) return '3rd '+m[1];
+  if(m=s.match(/^Round of 32 (\d+) Winner$/)) return 'R32-'+m[1]+' W';
+  if(m=s.match(/^Round of 16 (\d+) Winner$/)) return 'R16-'+m[1]+' W';
+  if(m=s.match(/^Quarterfinal (\d+) Winner$/)) return 'QF-'+m[1]+' W';
+  return s;
+}
+function bslot(name){
+  if(KNOWN.has(norm(name))) return '<div class="slot filled"><span class="flag">'+flag(name)+'</span><span class="nm">'+norm(name)+'</span></div>';
+  return '<div class="slot tbd"><span class="flag">\u00B7</span><span class="nm">'+koLabel(name)+'</span></div>';
+}
+function tbdTie(){return '<div class="tie"><div class="slot tbd"><span class="flag">\u00B7</span><span class="nm">TBD</span></div><div class="vs"></div><div class="slot tbd"><span class="flag">\u00B7</span><span class="nm">TBD</span></div></div>';}
+function koRound(e){ const t=e.home+' '+e.away;
+  if(/Round of 16/.test(t)) return 'QF';
+  if(/Round of 32/.test(t)) return 'R16';
+  if(/Quarterfinal/.test(t)) return 'SF';
+  if(/Semifinal/.test(t)) return 'F';
+  return 'R32';
+}
+function bracketTie(e){ return '<div class="tie">'+bslot(e.home)+'<div class="vs"></div>'+bslot(e.away)+'</div>'; }
+function renderBracket(){
+  const ko=DATA.events.filter(e=>e.ko).sort((a,b)=>new Date(a.utc)-new Date(b.utc));
+  const R={R32:[],R16:[],QF:[],SF:[],F:[]};
+  ko.forEach(e=>R[koRound(e)].push(e));
+  const col=(label,arr,want,key)=>{ let t=arr.map(bracketTie).join(''); if(arr.length<want) t+=Array.from({length:want-arr.length}).map(tbdTie).join(''); return '<div class="round" data-r="'+key+'"><div class="round-h">'+label+'</div>'+t+'</div>'; };
+  document.getElementById('bracketBox').innerHTML=
+     col('Round of 32',R.R32,16,'R32')
+    +col('Round of 16',R.R16,8,'R16')
+    +col('Quarter-finals',R.QF,4,'QF')
+    +col('Semi-finals',R.SF,2,'SF')
+    +'<div class="round" data-r="F"><div class="round-h">Final</div>'+(R.F.length?bracketTie(R.F[0]):tbdTie())+'<div class="champ"><div class="trophy">\uD83C\uDFC6</div><div class="lbl">Champion</div></div></div>';
+  applyBracketRound();
+}
+let BR_ROUND='R32';
+function setBracketRound(r){ BR_ROUND=r; applyBracketRound(); }
+function applyBracketRound(){
+  document.querySelectorAll('#bracketBox .round').forEach(el=>el.classList.toggle('active', el.getAttribute('data-r')===BR_ROUND));
+  document.querySelectorAll('#brTabs .brtab').forEach(b=>b.classList.toggle('on', b.getAttribute('data-r')===BR_ROUND));
+}
+function paint(){
+  document.getElementById('ts').textContent = DATA.fetched ? new Intl.DateTimeFormat('en-US',{timeZone:TZ,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(DATA.fetched)) : '\u2014';
+  const lc=liveCount();
+  document.getElementById('liveStatus').textContent = lc>0 ? (lc+(lc>1?' games':' game')+' in play') : 'Live Board';
+  renderMatches(); renderGroups(); renderBracket(); renderPredict(); if(document.getElementById('pulseBox')) renderStats();
+  document.getElementById('foot').textContent='Live scores, stats and goal timelines from ESPN, polled every 30s while games are in play. Standings recompute from real results. Odds are DraftKings lines via ESPN (home/draw/away normalized, away leg estimated). Qualification (IN/OUT) and the bracket fill in live from results; the 3rd-place race is provisional until groups finish. Built for Don.';
+}
+const links=[...document.querySelectorAll('nav a')];
+['matches','groups','bracket','predict','stats'].forEach(id=>{const ob=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)links.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+e.target.id));}),{rootMargin:'-45% 0px -50% 0px'});ob.observe(document.getElementById(id));});
+
+
+// ================= STATS PAGE =================
+const STATS_BAKED={"leaders": {"goals": [{"id": "273499", "n": "Jonathan David", "pos": "F", "tm": "Canada", "ab": "CAN", "v": 3.0}, {"id": "45843", "n": "Lionel Messi", "pos": "F", "tm": "Argentina", "ab": "ARG", "v": 3.0}, {"id": "304572", "n": "Ismael Saibari", "pos": "M", "tm": "Morocco", "ab": "MAR", "v": 2.0}, {"id": "252107", "n": "Vinícius Júnior", "pos": "F", "tm": "Brazil", "ab": "BRA", "v": 2.0}, {"id": "282643", "n": "Folarin Balogun", "pos": "F", "tm": "USA", "ab": "USA", "v": 2.0}, {"id": "205024", "n": "Cyle Larin", "pos": "F", "tm": "Canada", "ab": "CAN", "v": 2.0}, {"id": "259902", "n": "Matheus Cunha", "pos": "F", "tm": "Brazil", "ab": "BRA", "v": 2.0}, {"id": "386992", "n": "Johan Manzambi", "pos": "M", "tm": "Switzerland", "ab": "SUI", "v": 2.0}, {"id": "304242", "n": "Yasin Ayari", "pos": "M", "tm": "Sweden", "ab": "SWE", "v": 2.0}, {"id": "266555", "n": "Elijah Just", "pos": "F", "tm": "New Zealand", "ab": "NZL", "v": 2.0}, {"id": "253989", "n": "Erling Haaland", "pos": "F", "tm": "Norway", "ab": "NOR", "v": 2.0}, {"id": "231388", "n": "Kylian Mbappé", "pos": "F", "tm": "France", "ab": "FRA", "v": 2.0}, {"id": "231182", "n": "Kai Havertz", "pos": "F", "tm": "Germany", "ab": "GER", "v": 2.0}, {"id": "142200", "n": "Harry Kane", "pos": "F", "tm": "England", "ab": "ENG", "v": 2.0}, {"id": "256691", "n": "Teboho Mokoena", "pos": "M", "tm": "South Africa", "ab": "RSA", "v": 1.0}, {"id": "248276", "n": "Alex Freeman", "pos": "D", "tm": "USA", "ab": "USA", "v": 1.0}, {"id": "151714", "n": "Ladislav Krejcí", "pos": "D", "tm": "Czechia", "ab": "CZE", "v": 1.0}, {"id": "149981", "n": "Granit Xhaka", "pos": "M", "tm": "Switzerland", "ab": "SUI", "v": 1.0}, {"id": "202099", "n": "Breel Embolo", "pos": "F", "tm": "Switzerland", "ab": "SUI", "v": 1.0}, {"id": "280061", "n": "Hwang In-Beom", "pos": "M", "tm": "South Korea", "ab": "KOR", "v": 1.0}, {"id": "162843", "n": "John McGinn", "pos": "M", "tm": "Scotland", "ab": "SCO", "v": 1.0}, {"id": "233075", "n": "Julián Quiñones", "pos": "F", "tm": "Mexico", "ab": "MEX", "v": 1.0}, {"id": "167060", "n": "Raúl Jiménez", "pos": "F", "tm": "Mexico", "ab": "MEX", "v": 1.0}, {"id": "260643", "n": "Connor Metcalfe", "pos": "M", "tm": "Australia", "ab": "AUS", "v": 1.0}, {"id": "328535", "n": "Nestory Irankunda", "pos": "F", "tm": "Australia", "ab": "AUS", "v": 1.0}], "assists": [{"id": "20975", "n": "Julio Enciso", "pos": "M", "tm": "Paraguay", "ab": "PAR", "v": 2.0}, {"id": "246532", "n": "Brahim Díaz", "pos": "M", "tm": "Morocco", "ab": "MAR", "v": 2.0}, {"id": "134190", "n": "Chris Wood", "pos": "F", "tm": "New Zealand", "ab": "NZL", "v": 2.0}, {"id": "235662", "n": "Alexander Isak", "pos": "F", "tm": "Sweden", "ab": "SWE", "v": 2.0}, {"id": "190161", "n": "Joshua Kimmich", "pos": "M", "tm": "Germany", "ab": "GER", "v": 2.0}, {"id": "274632", "n": "Ryan Gravenberch", "pos": "M", "tm": "Netherlands", "ab": "NED", "v": 2.0}, {"id": "273300", "n": "Deniz Undav", "pos": "F", "tm": "Germany", "ab": "GER", "v": 2.0}, {"id": "274197", "n": "Lee Kang-In", "pos": "M", "tm": "South Korea", "ab": "KOR", "v": 1.0}, {"id": "248276", "n": "Alex Freeman", "pos": "D", "tm": "USA", "ab": "USA", "v": 1.0}, {"id": "191209", "n": "Vladimír Coufal", "pos": "D", "tm": "Czechia", "ab": "CZE", "v": 1.0}, {"id": "202099", "n": "Breel Embolo", "pos": "F", "tm": "Switzerland", "ab": "SUI", "v": 1.0}, {"id": "280061", "n": "Hwang In-Beom", "pos": "M", "tm": "South Korea", "ab": "KOR", "v": 1.0}, {"id": "170553", "n": "Sead Kolasinac", "pos": "D", "tm": "Bosnia and Herzegovina", "ab": "BIH", "v": 1.0}, {"id": "301416", "n": "Malik Tillman", "pos": "M", "tm": "USA", "ab": "USA", "v": 1.0}, {"id": "252107", "n": "Vinícius Júnior", "pos": "F", "tm": "Brazil", "ab": "BRA", "v": 1.0}, {"id": "194308", "n": "Roberto Alvarado", "pos": "F", "tm": "Mexico", "ab": "MEX", "v": 1.0}, {"id": "276942", "n": "Érik Lira", "pos": "M", "tm": "Mexico", "ab": "MEX", "v": 1.0}, {"id": "403528", "n": "Paul Okon-Engstler", "pos": "M", "tm": "Australia", "ab": "AUS", "v": 1.0}, {"id": "218522", "n": "Bruno Guimarães", "pos": "M", "tm": "Brazil", "ab": "BRA", "v": 1.0}, {"id": "387865", "n": "Alexandr Sojka", "pos": "M", "tm": "Czechia", "ab": "CZE", "v": 1.0}, {"id": "234715", "n": "Lucas Paquetá", "pos": "M", "tm": "Brazil", "ab": "BRA", "v": 1.0}, {"id": "259513", "n": "Rubén Vargas", "pos": "M", "tm": "Switzerland", "ab": "SUI", "v": 1.0}, {"id": "341494", "n": "Petar Sucic", "pos": "M", "tm": "Croatia", "ab": "CRO", "v": 1.0}, {"id": "311149", "n": "Amir Al-Ammari", "pos": "M", "tm": "Iraq", "ab": "IRQ", "v": 1.0}, {"id": "303748", "n": "Florian Wirtz", "pos": "M", "tm": "Germany", "ab": "GER", "v": 1.0}], "shotsOnTarget": [{"id": "273499", "n": "Jonathan David", "pos": "F", "tm": "Canada", "ab": "CAN", "v": 6.0}, {"id": "275842", "n": "Dan Ndoye", "pos": "F", "tm": "Switzerland", "ab": "SUI", "v": 4.0}, {"id": "253989", "n": "Erling Haaland", "pos": "F", "tm": "Norway", "ab": "NOR", "v": 4.0}, {"id": "231388", "n": "Kylian Mbappé", "pos": "F", "tm": "France", "ab": "FRA", "v": 4.0}, {"id": "45843", "n": "Lionel Messi", "pos": "F", "tm": "Argentina", "ab": "ARG", "v": 4.0}, {"id": "310452", "n": "Arda Güler", "pos": "M", "tm": "Turkiye", "ab": "TUR", "v": 3.0}, {"id": "252107", "n": "Vinícius Júnior", "pos": "F", "tm": "Brazil", "ab": "BRA", "v": 3.0}, {"id": "233075", "n": "Julián Quiñones", "pos": "F", "tm": "Mexico", "ab": "MEX", "v": 3.0}, {"id": "282643", "n": "Folarin Balogun", "pos": "F", "tm": "USA", "ab": "USA", "v": 3.0}, {"id": "167060", "n": "Raúl Jiménez", "pos": "F", "tm": "Mexico", "ab": "MEX", "v": 3.0}, {"id": "205024", "n": "Cyle Larin", "pos": "F", "tm": "Canada", "ab": "CAN", "v": 3.0}, {"id": "259513", "n": "Rubén Vargas", "pos": "M", "tm": "Switzerland", "ab": "SUI", "v": 3.0}, {"id": "249525", "n": "Michal Sadílek", "pos": "M", "tm": "Czechia", "ab": "CZE", "v": 3.0}, {"id": "142200", "n": "Harry Kane", "pos": "F", "tm": "England", "ab": "ENG", "v": 3.0}, {"id": "295847", "n": "Federico Viñas", "pos": "F", "tm": "Uruguay", "ab": "URU", "v": 3.0}, {"id": "281122", "n": "Felix Nmecha", "pos": "M", "tm": "Germany", "ab": "GER", "v": 3.0}, {"id": "267178", "n": "Merih Demiral", "pos": "D", "tm": "Turkiye", "ab": "TUR", "v": 2.0}, {"id": "170785", "n": "Hakan Çalhanoglu", "pos": "M", "tm": "Turkiye", "ab": "TUR", "v": 2.0}, {"id": "280061", "n": "Hwang In-Beom", "pos": "M", "tm": "South Korea", "ab": "KOR", "v": 2.0}, {"id": "304572", "n": "Ismael Saibari", "pos": "M", "tm": "Morocco", "ab": "MAR", "v": 2.0}, {"id": "301416", "n": "Malik Tillman", "pos": "M", "tm": "USA", "ab": "USA", "v": 2.0}, {"id": "260643", "n": "Connor Metcalfe", "pos": "M", "tm": "Australia", "ab": "AUS", "v": 2.0}, {"id": "109204", "n": "Edmílson Junior", "pos": "F", "tm": "Qatar", "ab": "QAT", "v": 2.0}, {"id": "231050", "n": "Raphinha ", "pos": "F", "tm": "Brazil", "ab": "BRA", "v": 2.0}, {"id": "328535", "n": "Nestory Irankunda", "pos": "F", "tm": "Australia", "ab": "AUS", "v": 2.0}], "totalShots": [{"id": "366509", "n": "Kenan Yildiz", "pos": "F", "tm": "Turkiye", "ab": "TUR", "v": 12.0}, {"id": "310452", "n": "Arda Güler", "pos": "M", "tm": "Turkiye", "ab": "TUR", "v": 11.0}, {"id": "170785", "n": "Hakan Çalhanoglu", "pos": "M", "tm": "Turkiye", "ab": "TUR", "v": 11.0}, {"id": "273499", "n": "Jonathan David", "pos": "F", "tm": "Canada", "ab": "CAN", "v": 11.0}, {"id": "275842", "n": "Dan Ndoye", "pos": "F", "tm": "Switzerland", "ab": "SUI", "v": 10.0}, {"id": "205024", "n": "Cyle Larin", "pos": "F", "tm": "Canada", "ab": "CAN", "v": 8.0}, {"id": "282643", "n": "Folarin Balogun", "pos": "F", "tm": "USA", "ab": "USA", "v": 7.0}, {"id": "142200", "n": "Harry Kane", "pos": "F", "tm": "England", "ab": "ENG", "v": 7.0}, {"id": "267178", "n": "Merih Demiral", "pos": "D", "tm": "Turkiye", "ab": "TUR", "v": 6.0}, {"id": "233075", "n": "Julián Quiñones", "pos": "F", "tm": "Mexico", "ab": "MEX", "v": 6.0}, {"id": "167060", "n": "Raúl Jiménez", "pos": "F", "tm": "Mexico", "ab": "MEX", "v": 6.0}, {"id": "149945", "n": "Son Heung-Min", "pos": "F", "tm": "South Korea", "ab": "KOR", "v": 6.0}, {"id": "45843", "n": "Lionel Messi", "pos": "F", "tm": "Argentina", "ab": "ARG", "v": 6.0}, {"id": "240233", "n": "Achraf Hakimi", "pos": "D", "tm": "Morocco", "ab": "MAR", "v": 5.0}, {"id": "151714", "n": "Ladislav Krejcí", "pos": "D", "tm": "Czechia", "ab": "CZE", "v": 5.0}, {"id": "202099", "n": "Breel Embolo", "pos": "F", "tm": "Switzerland", "ab": "SUI", "v": 5.0}, {"id": "304572", "n": "Ismael Saibari", "pos": "M", "tm": "Morocco", "ab": "MAR", "v": 5.0}, {"id": "301416", "n": "Malik Tillman", "pos": "M", "tm": "USA", "ab": "USA", "v": 5.0}, {"id": "192278", "n": "Diego Gómez", "pos": "M", "tm": "Paraguay", "ab": "PAR", "v": 5.0}, {"id": "305629", "n": "Ismail Yüksek", "pos": "M", "tm": "Turkiye", "ab": "TUR", "v": 5.0}, {"id": "303577", "n": "Brian Gutiérrez", "pos": "M", "tm": "Mexico", "ab": "MEX", "v": 5.0}, {"id": "259513", "n": "Rubén Vargas", "pos": "M", "tm": "Switzerland", "ab": "SUI", "v": 5.0}, {"id": "249525", "n": "Michal Sadílek", "pos": "M", "tm": "Czechia", "ab": "CZE", "v": 5.0}, {"id": "303745", "n": "Omar Marmoush", "pos": "F", "tm": "Egypt", "ab": "EGY", "v": 5.0}, {"id": "258906", "n": "Viktor Gyökeres", "pos": "F", "tm": "Sweden", "ab": "SWE", "v": 5.0}], "accuratePasses": [{"id": "193149", "n": "Abdülkerim Bardakçi", "pos": "D", "tm": "Turkiye", "ab": "TUR", "v": 188.0}, {"id": "272585", "n": "Chris Richards", "pos": "D", "tm": "USA", "ab": "USA", "v": 175.0}, {"id": "214562", "n": "Manuel Akanji", "pos": "D", "tm": "Switzerland", "ab": "SUI", "v": 172.0}, {"id": "170785", "n": "Hakan Çalhanoglu", "pos": "M", "tm": "Turkiye", "ab": "TUR", "v": 169.0}, {"id": "149981", "n": "Granit Xhaka", "pos": "M", "tm": "Switzerland", "ab": "SUI", "v": 164.0}, {"id": "236322", "n": "Gabriel Magalhães", "pos": "D", "tm": "Brazil", "ab": "BRA", "v": 159.0}, {"id": "212237", "n": "Nico Elvedi", "pos": "D", "tm": "Switzerland", "ab": "SUI", "v": 157.0}, {"id": "159047", "n": "Marquinhos", "pos": "D", "tm": "Brazil", "ab": "BRA", "v": 156.0}, {"id": "146290", "n": "Tim Ream", "pos": "D", "tm": "USA", "ab": "USA", "v": 152.0}, {"id": "157688", "n": "Kim Min-Jae", "pos": "D", "tm": "South Korea", "ab": "KOR", "v": 142.0}, {"id": "238318", "n": "Ferdi Kadioglu", "pos": "D", "tm": "Turkiye", "ab": "TUR", "v": 138.0}, {"id": "345769", "n": "Lee Gi-Hyuk", "pos": "D", "tm": "South Korea", "ab": "KOR", "v": 134.0}, {"id": "256691", "n": "Teboho Mokoena", "pos": "M", "tm": "South Africa", "ab": "RSA", "v": 132.0}, {"id": "270505", "n": "Stephen Eustáquio", "pos": "M", "tm": "Canada", "ab": "CAN", "v": 129.0}, {"id": "310452", "n": "Arda Güler", "pos": "M", "tm": "Turkiye", "ab": "TUR", "v": 126.0}, {"id": "280061", "n": "Hwang In-Beom", "pos": "M", "tm": "South Korea", "ab": "KOR", "v": 126.0}, {"id": "358744", "n": "Ime Okon", "pos": "D", "tm": "South Africa", "ab": "RSA", "v": 125.0}, {"id": "323807", "n": "Neil El Aynaoui", "pos": "M", "tm": "Morocco", "ab": "MAR", "v": 123.0}, {"id": "248276", "n": "Alex Freeman", "pos": "D", "tm": "USA", "ab": "USA", "v": 123.0}, {"id": "259975", "n": "Johan Vásquez", "pos": "D", "tm": "Mexico", "ab": "MEX", "v": 122.0}, {"id": "230963", "n": "Issa Diop", "pos": "D", "tm": "Morocco", "ab": "MAR", "v": 121.0}, {"id": "288897", "n": "Vitinha ", "pos": "M", "tm": "Portugal", "ab": "POR", "v": 121.0}, {"id": "207454", "n": "Jack Hendry", "pos": "D", "tm": "Scotland", "ab": "SCO", "v": 120.0}, {"id": "373927", "n": "Ayyoub Bouaddi", "pos": "M", "tm": "Morocco", "ab": "MAR", "v": 119.0}, {"id": "240233", "n": "Achraf Hakimi", "pos": "D", "tm": "Morocco", "ab": "MAR", "v": 119.0}], "saves": [{"id": "335240", "n": "Patrick Beach", "pos": "G", "tm": "Australia", "ab": "AUS", "v": 9.0}, {"id": "310372", "n": "Mahmoud Abunada", "pos": "G", "tm": "Qatar", "ab": "QAT", "v": 9.0}, {"id": "247018", "n": "Mohammed Al-Owais", "pos": "G", "tm": "Saudi Arabia", "ab": "KSA", "v": 9.0}, {"id": "301648", "n": "Orlando Gil", "pos": "G", "tm": "Paraguay", "ab": "PAR", "v": 8.0}, {"id": "277313", "n": "Matej Kovár", "pos": "G", "tm": "Czechia", "ab": "CZE", "v": 7.0}, {"id": "187946", "n": "Dominik Livakovic", "pos": "G", "tm": "Croatia", "ab": "CRO", "v": 7.0}, {"id": "181330", "n": "Vozinha", "pos": "G", "tm": "Cape Verde", "ab": "CPV", "v": 7.0}, {"id": "175921", "n": "Kim Seung-Gyu", "pos": "G", "tm": "South Korea", "ab": "KOR", "v": 6.0}, {"id": "214798", "n": "Alireza Beiranvand", "pos": "G", "tm": "Iran", "ab": "IRN", "v": 6.0}, {"id": "238544", "n": "Gregor Kobel", "pos": "G", "tm": "Switzerland", "ab": "SUI", "v": 5.0}, {"id": "196876", "n": "Alisson Becker", "pos": "G", "tm": "Brazil", "ab": "BRA", "v": 5.0}, {"id": "238362", "n": "Édouard Mendy", "pos": "G", "tm": "Senegal", "ab": "SEN", "v": 5.0}, {"id": "290899", "n": "Raúl Rangel", "pos": "G", "tm": "Mexico", "ab": "MEX", "v": 4.0}, {"id": "196230", "n": "Ronwen Williams", "pos": "G", "tm": "South Africa", "ab": "RSA", "v": 4.0}, {"id": "175149", "n": "Yassine Bounou", "pos": "G", "tm": "Morocco", "ab": "MAR", "v": 4.0}, {"id": "79941", "n": "Nikola Vasilj", "pos": "G", "tm": "Bosnia and Herzegovina", "ab": "BIH", "v": 4.0}, {"id": "265958", "n": "Zion Suzuki", "pos": "G", "tm": "Japan", "ab": "JPN", "v": 4.0}, {"id": "127444", "n": "Eloy Room", "pos": "G", "tm": "Curacao", "ab": "CUW", "v": 4.0}, {"id": "222922", "n": "Ugurcan Çakir", "pos": "G", "tm": "Turkiye", "ab": "TUR", "v": 3.0}, {"id": "181299", "n": "Angus Gunn", "pos": "G", "tm": "Scotland", "ab": "SCO", "v": 3.0}, {"id": "89090", "n": "Johny Placide", "pos": "G", "tm": "Haiti", "ab": "HAI", "v": 3.0}, {"id": "308915", "n": "Mostafa Shoubir", "pos": "G", "tm": "Egypt", "ab": "EGY", "v": 3.0}, {"id": "225561", "n": "Luca Zidane", "pos": "G", "tm": "Algeria", "ab": "ALG", "v": 3.0}, {"id": "207921", "n": "Hernán Galíndez", "pos": "G", "tm": "Ecuador", "ab": "ECU", "v": 3.0}, {"id": "195082", "n": "Alexander Schlager", "pos": "G", "tm": "Austria", "ab": "AUT", "v": 3.0}], "foulsCommitted": [{"id": "202501", "n": "Andrés Cubas", "pos": "M", "tm": "Paraguay", "ab": "PAR", "v": 10.0}, {"id": "323807", "n": "Neil El Aynaoui", "pos": "M", "tm": "Morocco", "ab": "MAR", "v": 6.0}, {"id": "297788", "n": "Lee Han-Beom", "pos": "D", "tm": "South Korea", "ab": "KOR", "v": 6.0}, {"id": "272585", "n": "Chris Richards", "pos": "D", "tm": "USA", "ab": "USA", "v": 6.0}, {"id": "151714", "n": "Ladislav Krejcí", "pos": "D", "tm": "Czechia", "ab": "CZE", "v": 6.0}, {"id": "359370", "n": "Aleksandar Pavlovic", "pos": "M", "tm": "Germany", "ab": "GER", "v": 6.0}, {"id": "320212", "n": "Martin Expérience", "pos": "D", "tm": "Haiti", "ab": "HAI", "v": 5.0}, {"id": "170553", "n": "Sead Kolasinac", "pos": "D", "tm": "Bosnia and Herzegovina", "ab": "BIH", "v": 5.0}, {"id": "84295", "n": "Juan Jose Cáceres", "pos": "D", "tm": "Paraguay", "ab": "PAR", "v": 5.0}, {"id": "250241", "n": "Frantzdy Pierrot", "pos": "F", "tm": "Haiti", "ab": "HAI", "v": 5.0}, {"id": "218703", "n": "Carlens Arcus", "pos": "D", "tm": "Haiti", "ab": "HAI", "v": 5.0}, {"id": "285452", "n": "Carlos Harvey", "pos": "M", "tm": "Panama", "ab": "PAN", "v": 5.0}, {"id": "166473", "n": "Thomas Meunier", "pos": "D", "tm": "Belgium", "ab": "BEL", "v": 5.0}, {"id": "333939", "n": "Danley Jean Jacques", "pos": "M", "tm": "Haiti", "ab": "HAI", "v": 4.0}, {"id": "322510", "n": "Robin Hranác", "pos": "D", "tm": "Czechia", "ab": "CZE", "v": 4.0}, {"id": "308979", "n": "Amar Dedic", "pos": "D", "tm": "Bosnia and Herzegovina", "ab": "BIH", "v": 4.0}, {"id": "207461", "n": "Harry Souttar", "pos": "D", "tm": "Australia", "ab": "AUS", "v": 4.0}, {"id": "188106", "n": "Ricardo Adé", "pos": "D", "tm": "Haiti", "ab": "HAI", "v": 4.0}, {"id": "256715", "n": "Weston McKennie", "pos": "M", "tm": "USA", "ab": "USA", "v": 4.0}, {"id": "269136", "n": "Ermedin Demirovic", "pos": "F", "tm": "Bosnia and Herzegovina", "ab": "BIH", "v": 4.0}, {"id": "318390", "n": "Tarik Muharemovic", "pos": "D", "tm": "Bosnia and Herzegovina", "ab": "BIH", "v": 4.0}, {"id": "213725", "n": "Ché Adams", "pos": "F", "tm": "Scotland", "ab": "SCO", "v": 4.0}, {"id": "272874", "n": "Homam Ahmed", "pos": "D", "tm": "Qatar", "ab": "QAT", "v": 4.0}, {"id": "194767", "n": "Ivan Sunjic", "pos": "M", "tm": "Bosnia and Herzegovina", "ab": "BIH", "v": 4.0}, {"id": "173306", "n": "Lawrence Shankland", "pos": "F", "tm": "Scotland", "ab": "SCO", "v": 4.0}], "foulsSuffered": [{"id": "202429", "n": "Lewis Ferguson", "pos": "M", "tm": "Scotland", "ab": "SCO", "v": 9.0}, {"id": "310452", "n": "Arda Güler", "pos": "M", "tm": "Turkiye", "ab": "TUR", "v": 8.0}, {"id": "240233", "n": "Achraf Hakimi", "pos": "D", "tm": "Morocco", "ab": "MAR", "v": 8.0}, {"id": "276218", "n": "Tahith Chong", "pos": "M", "tm": "Curacao", "ab": "CUW", "v": 8.0}, {"id": "301416", "n": "Malik Tillman", "pos": "M", "tm": "USA", "ab": "USA", "v": 7.0}, {"id": "162843", "n": "John McGinn", "pos": "M", "tm": "Scotland", "ab": "SCO", "v": 7.0}, {"id": "20975", "n": "Julio Enciso", "pos": "M", "tm": "Paraguay", "ab": "PAR", "v": 6.0}, {"id": "282643", "n": "Folarin Balogun", "pos": "F", "tm": "USA", "ab": "USA", "v": 6.0}, {"id": "275842", "n": "Dan Ndoye", "pos": "F", "tm": "Switzerland", "ab": "SUI", "v": 6.0}, {"id": "320212", "n": "Martin Expérience", "pos": "D", "tm": "Haiti", "ab": "HAI", "v": 5.0}, {"id": "274197", "n": "Lee Kang-In", "pos": "M", "tm": "South Korea", "ab": "KOR", "v": 5.0}, {"id": "256691", "n": "Teboho Mokoena", "pos": "M", "tm": "South Africa", "ab": "RSA", "v": 5.0}, {"id": "241031", "n": "Aiden O'Neill", "pos": "M", "tm": "Australia", "ab": "AUS", "v": 5.0}, {"id": "222776", "n": "Tyler Adams", "pos": "M", "tm": "USA", "ab": "USA", "v": 5.0}, {"id": "101982", "n": "Pedro Miguel", "pos": "D", "tm": "Qatar", "ab": "QAT", "v": 5.0}, {"id": "233075", "n": "Julián Quiñones", "pos": "F", "tm": "Mexico", "ab": "MEX", "v": 5.0}, {"id": "246532", "n": "Brahim Díaz", "pos": "M", "tm": "Morocco", "ab": "MAR", "v": 5.0}, {"id": "284769", "n": "Tajon Buchanan", "pos": "F", "tm": "Canada", "ab": "CAN", "v": 5.0}, {"id": "257390", "n": "Luis Díaz", "pos": "F", "tm": "Colombia", "ab": "COL", "v": 5.0}, {"id": "283672", "n": "Jérémy Doku", "pos": "F", "tm": "Belgium", "ab": "BEL", "v": 5.0}, {"id": "276767", "n": "Khuliso Mudau", "pos": "D", "tm": "South Africa", "ab": "RSA", "v": 4.0}, {"id": "230626", "n": "Richie Laryea", "pos": "D", "tm": "Canada", "ab": "CAN", "v": 4.0}, {"id": "188106", "n": "Ricardo Adé", "pos": "D", "tm": "Haiti", "ab": "HAI", "v": 4.0}, {"id": "270505", "n": "Stephen Eustáquio", "pos": "M", "tm": "Canada", "ab": "CAN", "v": 4.0}, {"id": "202099", "n": "Breel Embolo", "pos": "F", "tm": "Switzerland", "ab": "SUI", "v": 4.0}], "yellowCards": [{"id": "256691", "n": "Teboho Mokoena", "pos": "M", "tm": "South Africa", "ab": "RSA", "v": 2.0}, {"id": "345769", "n": "Lee Gi-Hyuk", "pos": "D", "tm": "South Korea", "ab": "KOR", "v": 1.0}, {"id": "333939", "n": "Danley Jean Jacques", "pos": "M", "tm": "Haiti", "ab": "HAI", "v": 1.0}, {"id": "332081", "n": "Alessandro Circati", "pos": "D", "tm": "Australia", "ab": "AUS", "v": 1.0}, {"id": "310372", "n": "Mahmoud Abunada", "pos": "G", "tm": "Qatar", "ab": "QAT", "v": 1.0}, {"id": "308979", "n": "Amar Dedic", "pos": "D", "tm": "Bosnia and Herzegovina", "ab": "BIH", "v": 1.0}, {"id": "293691", "n": "Alistair Johnston", "pos": "D", "tm": "Canada", "ab": "CAN", "v": 1.0}, {"id": "274197", "n": "Lee Kang-In", "pos": "M", "tm": "South Korea", "ab": "KOR", "v": 1.0}, {"id": "272585", "n": "Chris Richards", "pos": "D", "tm": "USA", "ab": "USA", "v": 1.0}, {"id": "230963", "n": "Issa Diop", "pos": "D", "tm": "Morocco", "ab": "MAR", "v": 1.0}, {"id": "222776", "n": "Tyler Adams", "pos": "M", "tm": "USA", "ab": "USA", "v": 1.0}, {"id": "220538", "n": "Nikola Katic", "pos": "D", "tm": "Bosnia and Herzegovina", "ab": "BIH", "v": 1.0}, {"id": "212237", "n": "Nico Elvedi", "pos": "D", "tm": "Switzerland", "ab": "SUI", "v": 1.0}, {"id": "207461", "n": "Harry Souttar", "pos": "D", "tm": "Australia", "ab": "AUS", "v": 1.0}, {"id": "186575", "n": "Douglas Santos", "pos": "D", "tm": "Brazil", "ab": "BRA", "v": 1.0}, {"id": "181657", "n": "Júnior Alonso", "pos": "D", "tm": "Paraguay", "ab": "PAR", "v": 1.0}, {"id": "151714", "n": "Ladislav Krejcí", "pos": "D", "tm": "Czechia", "ab": "CZE", "v": 1.0}, {"id": "104943", "n": "Andy Robertson", "pos": "D", "tm": "Scotland", "ab": "SCO", "v": 1.0}, {"id": "269136", "n": "Ermedin Demirovic", "pos": "F", "tm": "Bosnia and Herzegovina", "ab": "BIH", "v": 1.0}, {"id": "328541", "n": "Jordan Bos", "pos": "D", "tm": "Australia", "ab": "AUS", "v": 1.0}, {"id": "240369", "n": "Jean-Ricner Bellegarde", "pos": "M", "tm": "Haiti", "ab": "HAI", "v": 1.0}, {"id": "222396", "n": "Antonee Robinson", "pos": "D", "tm": "USA", "ab": "USA", "v": 1.0}, {"id": "267053", "n": "Jacob Italiano", "pos": "M", "tm": "Australia", "ab": "AUS", "v": 1.0}, {"id": "365345", "n": "Luc de Fougerolles", "pos": "D", "tm": "Canada", "ab": "CAN", "v": 1.0}, {"id": "282643", "n": "Folarin Balogun", "pos": "F", "tm": "USA", "ab": "USA", "v": 1.0}], "redCards": [{"id": "318390", "n": "Tarik Muharemovic", "pos": "D", "tm": "Bosnia and Herzegovina", "ab": "BIH", "v": 1.0}, {"id": "219254", "n": "Assim Madibo", "pos": "M", "tm": "Qatar", "ab": "QAT", "v": 1.0}, {"id": "48128", "n": "Miguel Almirón", "pos": "F", "tm": "Paraguay", "ab": "PAR", "v": 1.0}, {"id": "272874", "n": "Homam Ahmed", "pos": "D", "tm": "Qatar", "ab": "QAT", "v": 1.0}, {"id": "224323", "n": "César Montes", "pos": "D", "tm": "Mexico", "ab": "MEX", "v": 1.0}, {"id": "228595", "n": "Sphephelo Sithole", "pos": "M", "tm": "South Africa", "ab": "RSA", "v": 1.0}, {"id": "157046", "n": "Themba Zwane", "pos": "M", "tm": "South Africa", "ab": "RSA", "v": 1.0}, {"id": "415148", "n": "Issa Laye", "pos": "D", "tm": "Qatar", "ab": "QAT", "v": 0.0}, {"id": "400594", "n": "Mbekezeli Mbokazi", "pos": "D", "tm": "South Africa", "ab": "RSA", "v": 0.0}, {"id": "373927", "n": "Ayyoub Bouaddi", "pos": "M", "tm": "Morocco", "ab": "MAR", "v": 0.0}, {"id": "358744", "n": "Ime Okon", "pos": "D", "tm": "South Africa", "ab": "RSA", "v": 0.0}, {"id": "345769", "n": "Lee Gi-Hyuk", "pos": "D", "tm": "South Korea", "ab": "KOR", "v": 0.0}, {"id": "335240", "n": "Patrick Beach", "pos": "G", "tm": "Australia", "ab": "AUS", "v": 0.0}, {"id": "333939", "n": "Danley Jean Jacques", "pos": "M", "tm": "Haiti", "ab": "HAI", "v": 0.0}, {"id": "332081", "n": "Alessandro Circati", "pos": "D", "tm": "Australia", "ab": "AUS", "v": 0.0}, {"id": "323807", "n": "Neil El Aynaoui", "pos": "M", "tm": "Morocco", "ab": "MAR", "v": 0.0}, {"id": "322510", "n": "Robin Hranác", "pos": "D", "tm": "Czechia", "ab": "CZE", "v": 0.0}, {"id": "320212", "n": "Martin Expérience", "pos": "D", "tm": "Haiti", "ab": "HAI", "v": 0.0}, {"id": "310452", "n": "Arda Güler", "pos": "M", "tm": "Turkiye", "ab": "TUR", "v": 0.0}, {"id": "310372", "n": "Mahmoud Abunada", "pos": "G", "tm": "Qatar", "ab": "QAT", "v": 0.0}, {"id": "308979", "n": "Amar Dedic", "pos": "D", "tm": "Bosnia and Herzegovina", "ab": "BIH", "v": 0.0}, {"id": "307870", "n": "Chadi Riad", "pos": "D", "tm": "Morocco", "ab": "MAR", "v": 0.0}, {"id": "301648", "n": "Orlando Gil", "pos": "G", "tm": "Paraguay", "ab": "PAR", "v": 0.0}, {"id": "297788", "n": "Lee Han-Beom", "pos": "D", "tm": "South Korea", "ab": "KOR", "v": 0.0}, {"id": "293691", "n": "Alistair Johnston", "pos": "D", "tm": "Canada", "ab": "CAN", "v": 0.0}]}, "athId": {"249524": {"n": "Cody Gakpo", "p": "F"}, "101982": {"n": "Pedro Miguel", "p": "D"}, "134190": {"n": "Chris Wood", "p": "F"}, "142200": {"n": "Harry Kane", "p": "F"}, "146290": {"n": "Tim Ream", "p": "D"}, "149945": {"n": "Son Heung-Min", "p": "F"}, "149981": {"n": "Granit Xhaka", "p": "M"}, "151714": {"n": "Ladislav Krejcí", "p": "D"}, "157046": {"n": "Themba Zwane", "p": "M"}, "157688": {"n": "Kim Min-Jae", "p": "D"}, "159047": {"n": "Marquinhos", "p": "D"}, "162843": {"n": "John McGinn", "p": "M"}, "166473": {"n": "Thomas Meunier", "p": "D"}, "167060": {"n": "Raúl Jiménez", "p": "F"}, "170553": {"n": "Sead Kolasinac", "p": "D"}, "170785": {"n": "Hakan Çalhanoglu", "p": "M"}, "175149": {"n": "Yassine Bounou", "p": "G"}, "175921": {"n": "Kim Seung-Gyu", "p": "G"}, "181330": {"n": "Vozinha", "p": "G"}, "186575": {"n": "Douglas Santos", "p": "D"}, "187946": {"n": "Dominik Livakovic", "p": "G"}, "190161": {"n": "Joshua Kimmich", "p": "M"}, "191209": {"n": "Vladimír Coufal", "p": "D"}, "193149": {"n": "Abdülkerim Bardakçi", "p": "D"}, "196230": {"n": "Ronwen Williams", "p": "G"}, "196876": {"n": "Alisson Becker", "p": "G"}, "202099": {"n": "Breel Embolo", "p": "F"}, "202429": {"n": "Lewis Ferguson", "p": "M"}, "202501": {"n": "Andrés Cubas", "p": "M"}, "205024": {"n": "Cyle Larin", "p": "F"}, "207461": {"n": "Harry Souttar", "p": "D"}, "20975": {"n": "Julio Enciso", "p": "M"}, "212237": {"n": "Nico Elvedi", "p": "D"}, "214562": {"n": "Manuel Akanji", "p": "D"}, "214798": {"n": "Alireza Beiranvand", "p": "G"}, "218703": {"n": "Carlens Arcus", "p": "D"}, "219254": {"n": "Assim Madibo", "p": "M"}, "220538": {"n": "Nikola Katic", "p": "D"}, "222776": {"n": "Tyler Adams", "p": "M"}, "224323": {"n": "César Montes", "p": "D"}, "228595": {"n": "Sphephelo Sithole", "p": "M"}, "230963": {"n": "Issa Diop", "p": "D"}, "231182": {"n": "Kai Havertz", "p": "F"}, "231388": {"n": "Kylian Mbappé", "p": "F"}, "233075": {"n": "Julián Quiñones", "p": "F"}, "235662": {"n": "Alexander Isak", "p": "F"}, "236322": {"n": "Gabriel Magalhães", "p": "D"}, "238318": {"n": "Ferdi Kadioglu", "p": "D"}, "238362": {"n": "Édouard Mendy", "p": "G"}, "238544": {"n": "Gregor Kobel", "p": "G"}, "240233": {"n": "Achraf Hakimi", "p": "D"}, "241031": {"n": "Aiden O'Neill", "p": "M"}, "246532": {"n": "Brahim Díaz", "p": "M"}, "247018": {"n": "Mohammed Al-Owais", "p": "G"}, "248276": {"n": "Alex Freeman", "p": "D"}, "249525": {"n": "Michal Sadílek", "p": "M"}, "250241": {"n": "Frantzdy Pierrot", "p": "F"}, "252107": {"n": "Vinícius Júnior", "p": "F"}, "253989": {"n": "Erling Haaland", "p": "F"}, "256691": {"n": "Teboho Mokoena", "p": "M"}, "259513": {"n": "Rubén Vargas", "p": "M"}, "259902": {"n": "Matheus Cunha", "p": "F"}, "266555": {"n": "Elijah Just", "p": "F"}, "267178": {"n": "Merih Demiral", "p": "D"}, "270505": {"n": "Stephen Eustáquio", "p": "M"}, "272585": {"n": "Chris Richards", "p": "D"}, "272874": {"n": "Homam Ahmed", "p": "D"}, "273300": {"n": "Deniz Undav", "p": "F"}, "273499": {"n": "Jonathan David", "p": "F"}, "274197": {"n": "Lee Kang-In", "p": "M"}, "274632": {"n": "Ryan Gravenberch", "p": "M"}, "275842": {"n": "Dan Ndoye", "p": "F"}, "276218": {"n": "Tahith Chong", "p": "M"}, "277313": {"n": "Matej Kovár", "p": "G"}, "280061": {"n": "Hwang In-Beom", "p": "M"}, "282643": {"n": "Folarin Balogun", "p": "F"}, "285452": {"n": "Carlos Harvey", "p": "M"}, "290899": {"n": "Raúl Rangel", "p": "G"}, "293691": {"n": "Alistair Johnston", "p": "D"}, "295847": {"n": "Federico Viñas", "p": "F"}, "297788": {"n": "Lee Han-Beom", "p": "D"}, "301416": {"n": "Malik Tillman", "p": "M"}, "301648": {"n": "Orlando Gil", "p": "G"}, "304242": {"n": "Yasin Ayari", "p": "M"}, "304572": {"n": "Ismael Saibari", "p": "M"}, "308979": {"n": "Amar Dedic", "p": "D"}, "310372": {"n": "Mahmoud Abunada", "p": "G"}, "310452": {"n": "Arda Güler", "p": "M"}, "318390": {"n": "Tarik Muharemovic", "p": "D"}, "320212": {"n": "Martin Expérience", "p": "D"}, "322510": {"n": "Robin Hranác", "p": "D"}, "323807": {"n": "Neil El Aynaoui", "p": "M"}, "332081": {"n": "Alessandro Circati", "p": "D"}, "333939": {"n": "Danley Jean Jacques", "p": "M"}, "335240": {"n": "Patrick Beach", "p": "G"}, "345769": {"n": "Lee Gi-Hyuk", "p": "D"}, "358744": {"n": "Ime Okon", "p": "D"}, "359370": {"n": "Aleksandar Pavlovic", "p": "M"}, "366509": {"n": "Kenan Yildiz", "p": "F"}, "373927": {"n": "Ayyoub Bouaddi", "p": "M"}, "386992": {"n": "Johan Manzambi", "p": "M"}, "400594": {"n": "Mbekezeli Mbokazi", "p": "D"}, "415148": {"n": "Issa Laye", "p": "D"}, "45843": {"n": "Lionel Messi", "p": "F"}, "48128": {"n": "Miguel Almirón", "p": "F"}, "84295": {"n": "Juan Jose Cáceres", "p": "D"}, "311149": {"n": "Amir Al-Ammari", "p": "M"}, "231050": {"n": "Raphinha ", "p": "F"}, "265958": {"n": "Zion Suzuki", "p": "G"}, "225561": {"n": "Luca Zidane", "p": "G"}, "303748": {"n": "Florian Wirtz", "p": "M"}, "222922": {"n": "Ugurcan Çakir", "p": "G"}, "257390": {"n": "Luis Díaz", "p": "F"}, "260643": {"n": "Connor Metcalfe", "p": "M"}, "307870": {"n": "Chadi Riad", "p": "D"}, "207921": {"n": "Hernán Galíndez", "p": "G"}, "222396": {"n": "Antonee Robinson", "p": "D"}, "288897": {"n": "Vitinha ", "p": "M"}, "328541": {"n": "Jordan Bos", "p": "D"}, "240369": {"n": "Jean-Ricner Bellegarde", "p": "M"}, "305629": {"n": "Ismail Yüksek", "p": "M"}, "188106": {"n": "Ricardo Adé", "p": "D"}, "194767": {"n": "Ivan Sunjic", "p": "M"}, "89090": {"n": "Johny Placide", "p": "G"}, "173306": {"n": "Lawrence Shankland", "p": "F"}, "207454": {"n": "Jack Hendry", "p": "D"}, "365345": {"n": "Luc de Fougerolles", "p": "D"}, "308915": {"n": "Mostafa Shoubir", "p": "G"}, "259975": {"n": "Johan Vásquez", "p": "D"}, "276767": {"n": "Khuliso Mudau", "p": "D"}, "104943": {"n": "Andy Robertson", "p": "D"}, "234715": {"n": "Lucas Paquetá", "p": "M"}, "403528": {"n": "Paul Okon-Engstler", "p": "M"}, "127444": {"n": "Eloy Room", "p": "G"}, "181657": {"n": "Júnior Alonso", "p": "D"}, "192278": {"n": "Diego Gómez", "p": "M"}, "79941": {"n": "Nikola Vasilj", "p": "G"}, "181299": {"n": "Angus Gunn", "p": "G"}, "230626": {"n": "Richie Laryea", "p": "D"}, "109204": {"n": "Edmílson Junior", "p": "F"}, "267053": {"n": "Jacob Italiano", "p": "M"}, "387865": {"n": "Alexandr Sojka", "p": "M"}, "276942": {"n": "Érik Lira", "p": "M"}, "195082": {"n": "Alexander Schlager", "p": "G"}, "213725": {"n": "Ché Adams", "p": "F"}, "269136": {"n": "Ermedin Demirovic", "p": "F"}, "341494": {"n": "Petar Sucic", "p": "M"}, "284769": {"n": "Tajon Buchanan", "p": "F"}, "218522": {"n": "Bruno Guimarães", "p": "M"}, "281122": {"n": "Felix Nmecha", "p": "M"}, "303577": {"n": "Brian Gutiérrez", "p": "M"}, "256715": {"n": "Weston McKennie", "p": "M"}, "328535": {"n": "Nestory Irankunda", "p": "F"}, "283672": {"n": "Jérémy Doku", "p": "F"}, "303745": {"n": "Omar Marmoush", "p": "F"}, "258906": {"n": "Viktor Gyökeres", "p": "F"}, "194308": {"n": "Roberto Alvarado", "p": "F"}}, "teamId": {"164": {"n": "Spain", "a": "ESP"}, "202": {"n": "Argentina", "a": "ARG"}, "203": {"n": "Mexico", "a": "MEX"}, "205": {"n": "Brazil", "a": "BRA"}, "206": {"n": "Canada", "a": "CAN"}, "208": {"n": "Colombia", "a": "COL"}, "209": {"n": "Ecuador", "a": "ECU"}, "210": {"n": "Paraguay", "a": "PAR"}, "212": {"n": "Uruguay", "a": "URU"}, "448": {"n": "England", "a": "ENG"}, "449": {"n": "Netherlands", "a": "NED"}, "450": {"n": "Czechia", "a": "CZE"}, "451": {"n": "South Korea", "a": "KOR"}, "452": {"n": "Bosnia and Herzegovina", "a": "BIH"}, "459": {"n": "Belgium", "a": "BEL"}, "464": {"n": "Norway", "a": "NOR"}, "465": {"n": "Turkiye", "a": "TUR"}, "466": {"n": "Sweden", "a": "SWE"}, "467": {"n": "South Africa", "a": "RSA"}, "469": {"n": "Iran", "a": "IRN"}, "474": {"n": "Austria", "a": "AUT"}, "475": {"n": "Switzerland", "a": "SUI"}, "477": {"n": "Croatia", "a": "CRO"}, "478": {"n": "France", "a": "FRA"}, "481": {"n": "Germany", "a": "GER"}, "482": {"n": "Portugal", "a": "POR"}, "580": {"n": "Scotland", "a": "SCO"}, "624": {"n": "Algeria", "a": "ALG"}, "627": {"n": "Japan", "a": "JPN"}, "628": {"n": "Australia", "a": "AUS"}, "654": {"n": "Senegal", "a": "SEN"}, "655": {"n": "Saudi Arabia", "a": "KSA"}, "659": {"n": "Tunisia", "a": "TUN"}, "660": {"n": "USA", "a": "USA"}, "2570": {"n": "Uzbekistan", "a": "UZB"}, "2597": {"n": "Cape Verde", "a": "CPV"}, "2620": {"n": "Egypt", "a": "EGY"}, "2654": {"n": "Haiti", "a": "HAI"}, "2659": {"n": "Panama", "a": "PAN"}, "2666": {"n": "New Zealand", "a": "NZL"}, "2850": {"n": "DR Congo", "a": "COD"}, "2869": {"n": "Morocco", "a": "MAR"}, "2917": {"n": "Jordan", "a": "JOR"}, "4375": {"n": "Iraq", "a": "IRQ"}, "4398": {"n": "Qatar", "a": "QAT"}, "4469": {"n": "Ghana", "a": "GHA"}, "4789": {"n": "Ivory Coast", "a": "CIV"}, "11678": {"n": "Curacao", "a": "CUW"}}, "fetched": "2026-06-21T03:11:22.148377+00:00"};
+let STATS={leaders:STATS_BAKED.leaders, athId:STATS_BAKED.athId, teamId:STATS_BAKED.teamId, fetched:STATS_BAKED.fetched};
+const PIN_ID='45843'; // Lionel Messi wins ties
+const pinCmp=(a,b)=> a.id===PIN_ID?-1 : (b.id===PIN_ID?1:0);
+const sortPinned=rows=>[...rows].sort((a,b)=>(b.v-a.v)||pinCmp(a,b));
+const FINAL_UTC=new Date('2026-07-19T19:00:00Z');
+const TOTAL_MATCHES=104;
+const LEADERS_URL='https://sports.core.api.espn.com/v2/sports/soccer/leagues/fifa.world/seasons/2026/types/1/leaders';
+const CATKEYS=['goals','assists','shotsOnTarget','totalShots','accuratePasses','saves','foulsCommitted','foulsSuffered','yellowCards','redCards'];
+
+async function fetchLeaders(){
+  try{
+    const r=await fetch(LEADERS_URL); if(!r.ok) throw new Error('leaders '+r.status);
+    const d=await r.json(); const seen={};
+    (d.categories||[]).forEach(c=>{ if(!(c.name in seen)) seen[c.name]=c; });
+    // resolve any unknown athletes from their refs (self-healing for new scorers)
+    const need={};
+    CATKEYS.forEach(nm=>{ const c=seen[nm]; if(!c) return;
+      (c.leaders||[]).slice(0,25).forEach(ld=>{
+        const aid=ld.athlete.$ref.split('/athletes/')[1].split('?')[0];
+        if(!STATS.athId[aid] && !need[aid]) need[aid]=ld.athlete.$ref.replace(/^http:/,'https:');
+      });
+    });
+    const ids=Object.keys(need);
+    if(ids.length) await Promise.all(ids.map(async aid=>{
+      try{ const ar=await fetch(need[aid]); if(!ar.ok) return; const a=await ar.json();
+        const nm=a.displayName||a.fullName||a.shortName;
+        if(nm) STATS.athId[aid]={n:nm, p:(a.position||{}).abbreviation};
+      }catch(_){ }
+    }));
+    const out={};
+    CATKEYS.forEach(nm=>{ const c=seen[nm]; if(!c) return;
+      out[nm]=(c.leaders||[]).slice(0,25).map(ld=>{
+        const aid=ld.athlete.$ref.split('/athletes/')[1].split('?')[0];
+        const tid=ld.team.$ref.split('/teams/')[1].split('?')[0];
+        const a=STATS.athId[aid]||{}, t=STATS.teamId[tid]||{};
+        return {id:aid,n:a.n||('#'+aid),pos:a.p,tm:t.n||'',ab:t.a,v:ld.value};
+      });
+    });
+    if(Object.keys(out).length){ STATS.leaders=out; STATS.fetched=new Date().toISOString(); renderStats(); }
+  }catch(e){ console.warn('leaders refresh failed, using baked',e); }
+}
+
+function tournamentTotals(){
+  let goals=0,y=0,r=0,pen=0,og=0,played=0,inplay=0;
+  DATA.events.forEach(e=>{
+    if(e.state==='post'){played++; goals+=(e.hs||0)+(e.as||0);}
+    else if(e.state==='in'){inplay++; goals+=(e.hs||0)+(e.as||0);}
+    (e.ev||[]).forEach(x=>{ if(x.y)y++; if(x.r)r++; if(x.g&&x.pen)pen++; if(x.g&&x.og)og++; });
+  });
+  return {goals,y,r,pen,og,played,inplay};
+}
+function tickCountdown(){
+  const el=document.getElementById('cdHead'); if(!el) return;
+  let ms=FINAL_UTC-new Date(); if(ms<0)ms=0;
+  const d=Math.floor(ms/864e5),h=Math.floor(ms%864e5/36e5),m=Math.floor(ms%36e5/6e4),s=Math.floor(ms%6e4/1e3);
+  const p=n=>String(n).padStart(2,'0');
+  el.innerHTML='<span class="hcd-l">Final</span><b>'+d+'</b><span class="u">d</span><b>'+p(h)+'</b>:<b>'+p(m)+'</b>:<b>'+p(s)+'</b>';
+}
+function renderPulse(){
+  const t=tournamentTotals(); const denom=t.played+t.inplay; const gpm=denom?(t.goals/denom):0;
+  document.getElementById('pulseBox').innerHTML=
+   '<div class="tile gold"><div class="big">'+t.goals+'</div><div class="lbl">Total Goals</div><div class="sub">'+gpm.toFixed(2)+' per match \u00B7 '+t.pen+' pens \u00B7 '+t.og+' OG</div></div>'
+   +'<div class="tile cyan"><div class="big">'+t.played+'<span style="font-size:15px;color:var(--faint)"> / '+TOTAL_MATCHES+'</span></div><div class="lbl">Matches Played</div><div class="sub">'+(t.inplay?(t.inplay+' in play now'):'group stage')+'</div></div>'
+   +'<div class="tile"><div class="big" style="color:#f1c531">'+t.y+'</div><div class="lbl">Yellow Cards</div><div class="sub">'+(t.played?(t.y/t.played).toFixed(1):'0')+' per match</div></div>'
+   +'<div class="tile red"><div class="big">'+t.r+'</div><div class="lbl">Red Cards</div><div class="sub">straight &amp; 2nd yellow</div></div>';
+}
+function renderBoot(){
+  const rows=sortPinned(STATS.leaders.goals||[]).slice(0,8); const max=rows.length?Math.max(1,rows[0].v):1;
+  document.getElementById('bootBox').innerHTML=rows.map((r,i)=>
+   '<div class="bootrow"><span class="rk">'+(i+1)+'</span><span class="flag">'+flag(r.tm)+'</span><span class="nm">'+(r.n||'')+'</span>'
+   +'<div class="track"><div class="fill" style="width:'+(r.v/max*100)+'%"></div></div><span class="val">'+r.v+'</span></div>').join('');
+}
+const PERSTAT=[['goals','Goals'],['assists','Assists'],['shotsOnTarget','Shots on Target'],['totalShots','Total Shots'],['saves','Saves'],['accuratePasses','Accurate Passes'],['foulsCommitted','Fouls Committed'],['foulsSuffered','Fouls Suffered'],['yellowCards','Yellow Cards'],['redCards','Red Cards']];
+function psRow(r,i){ return '<div class="psrow '+(i===0?'top':'')+'"><span class="rk">'+(i+1)+'</span><span class="flag">'+flag(r.tm)+'</span><span class="nm">'+(r.n||'')+'</span><span class="v">'+r.v+'</span></div>'; }
+function renderPerStat(){
+  document.getElementById('perstatBox').innerHTML=PERSTAT.map(p=>{
+    const all=sortPinned(STATS.leaders[p[0]]||[]).filter(r=>r.v>0); if(!all.length) return '';
+    const top=all.slice(0,5), rest=all.slice(5);
+    let h='<div class="pscard"><h4>'+p[1]+'<span class="pscount">'+all.length+'</span></h4>'+top.map((r,i)=>psRow(r,i)).join('');
+    if(rest.length) h+='<details class="psmore"><summary>Show all '+all.length+'</summary>'+rest.map((r,i)=>psRow(r,i+5)).join('')+'</details>';
+    return h+'</div>';
+  }).join('');
+}
+const MIN={"101982": {"min": 180, "app": 2}, "134190": {"min": 90, "app": 1}, "142200": {"min": 90, "app": 1}, "146290": {"min": 180, "app": 2}, "149945": {"min": 126, "app": 2}, "149981": {"min": 180, "app": 2}, "151714": {"min": 180, "app": 2}, "157046": {"min": 23, "app": 1}, "157688": {"min": 180, "app": 2}, "159047": {"min": 180, "app": 2}, "162843": {"min": 172, "app": 2}, "166473": {"min": 90, "app": 1}, "167060": {"min": 156, "app": 2}, "170553": {"min": 174, "app": 2}, "170785": {"min": 180, "app": 2}, "175149": {"min": 180, "app": 2}, "175921": {"min": 180, "app": 2}, "181330": {"min": 90, "app": 1}, "186575": {"min": 180, "app": 2}, "187946": {"min": 90, "app": 1}, "190161": {"min": 83, "app": 1}, "191209": {"min": 180, "app": 2}, "193149": {"min": 176, "app": 2}, "196230": {"min": 180, "app": 2}, "196876": {"min": 180, "app": 2}, "202099": {"min": 179, "app": 2}, "202429": {"min": 180, "app": 2}, "202501": {"min": 180, "app": 2}, "205024": {"min": 104, "app": 2}, "207461": {"min": 180, "app": 2}, "20975": {"min": 179, "app": 2}, "212237": {"min": 180, "app": 2}, "214562": {"min": 180, "app": 2}, "214798": {"min": 90, "app": 1}, "218703": {"min": 135, "app": 2}, "219254": {"min": 132, "app": 2}, "220538": {"min": 180, "app": 2}, "222776": {"min": 180, "app": 2}, "224323": {"min": 90, "app": 1}, "228595": {"min": 49, "app": 1}, "230963": {"min": 180, "app": 2}, "231182": {"min": 90, "app": 1}, "231388": {"min": 90, "app": 1}, "233075": {"min": 163, "app": 2}, "235662": {"min": 89, "app": 1}, "236322": {"min": 180, "app": 2}, "238318": {"min": 160, "app": 2}, "238362": {"min": 90, "app": 1}, "238544": {"min": 180, "app": 2}, "240233": {"min": 180, "app": 2}, "241031": {"min": 180, "app": 2}, "246532": {"min": 149, "app": 2}, "247018": {"min": 90, "app": 1}, "248276": {"min": 180, "app": 2}, "249525": {"min": 93, "app": 2}, "250241": {"min": 135, "app": 2}, "252107": {"min": 171, "app": 2}, "253989": {"min": 90, "app": 1}, "256691": {"min": 180, "app": 2}, "259513": {"min": 98, "app": 2}, "259902": {"min": 93, "app": 2}, "266555": {"min": 90, "app": 1}, "267178": {"min": 180, "app": 2}, "270505": {"min": 179, "app": 2}, "272585": {"min": 180, "app": 2}, "272874": {"min": 123, "app": 2}, "273300": {"min": 26, "app": 1}, "273499": {"min": 151, "app": 2}, "274197": {"min": 180, "app": 2}, "274632": {"min": 81, "app": 1}, "275842": {"min": 136, "app": 2}, "276218": {"min": 83, "app": 1}, "277313": {"min": 180, "app": 2}, "280061": {"min": 174, "app": 2}, "282643": {"min": 161, "app": 2}, "285452": {"min": 90, "app": 1}, "290899": {"min": 180, "app": 2}, "293691": {"min": 180, "app": 2}, "295847": {"min": 89, "app": 1}, "297788": {"min": 180, "app": 2}, "301416": {"min": 172, "app": 2}, "301648": {"min": 180, "app": 2}, "304242": {"min": 90, "app": 1}, "304572": {"min": 173, "app": 2}, "308979": {"min": 180, "app": 2}, "310372": {"min": 180, "app": 2}, "310452": {"min": 180, "app": 2}, "318390": {"min": 170, "app": 2}, "320212": {"min": 180, "app": 2}, "322510": {"min": 180, "app": 2}, "323807": {"min": 180, "app": 2}, "332081": {"min": 180, "app": 2}, "333939": {"min": 180, "app": 2}, "335240": {"min": 180, "app": 2}, "345769": {"min": 180, "app": 2}, "358744": {"min": 180, "app": 2}, "359370": {"min": 90, "app": 1}, "366509": {"min": 135, "app": 2}, "373927": {"min": 180, "app": 2}, "386992": {"min": 44, "app": 2}, "400594": {"min": 180, "app": 2}, "415148": {"min": 180, "app": 2}, "45843": {"min": 80, "app": 1}, "48128": {"min": 124, "app": 2}, "84295": {"min": 160, "app": 2}, "311149": {"min": 90, "app": 1}, "231050": {"min": 130, "app": 2}, "265958": {"min": 90, "app": 1}, "225561": {"min": 90, "app": 1}, "303748": {"min": 90, "app": 1}, "222922": {"min": 180, "app": 2}, "257390": {"min": 89, "app": 1}, "260643": {"min": 135, "app": 2}, "307870": {"min": 180, "app": 2}, "207921": {"min": 90, "app": 1}, "222396": {"min": 170, "app": 2}, "288897": {"min": 83, "app": 1}, "328541": {"min": 174, "app": 2}, "240369": {"min": 171, "app": 2}, "305629": {"min": 141, "app": 2}, "188106": {"min": 180, "app": 2}, "194767": {"min": 102, "app": 2}, "89090": {"min": 180, "app": 2}, "173306": {"min": 83, "app": 1}, "207454": {"min": 180, "app": 2}, "365345": {"min": 161, "app": 2}, "308915": {"min": 90, "app": 1}, "259975": {"min": 180, "app": 2}, "276767": {"min": 180, "app": 2}, "104943": {"min": 180, "app": 2}, "234715": {"min": 125, "app": 2}, "403528": {"min": 162, "app": 2}, "127444": {"min": 90, "app": 1}, "181657": {"min": 180, "app": 2}, "192278": {"min": 147, "app": 2}, "79941": {"min": 180, "app": 2}, "181299": {"min": 180, "app": 2}, "230626": {"min": 180, "app": 2}, "109204": {"min": 133, "app": 2}, "267053": {"min": 164, "app": 2}, "387865": {"min": 139, "app": 2}, "276942": {"min": 166, "app": 2}, "195082": {"min": 90, "app": 1}, "213725": {"min": 146, "app": 2}, "269136": {"min": 176, "app": 2}, "341494": {"min": 90, "app": 1}, "284769": {"min": 144, "app": 2}, "218522": {"min": 161, "app": 2}, "281122": {"min": 73, "app": 1}, "303577": {"min": 137, "app": 2}, "256715": {"min": 179, "app": 2}, "328535": {"min": 106, "app": 2}, "283672": {"min": 86, "app": 1}, "303745": {"min": 90, "app": 1}, "258906": {"min": 90, "app": 1}, "194308": {"min": 170, "app": 2}};
+const SMAP={goals:'g',assists:'a',shotsOnTarget:'sot',totalShots:'sh',accuratePasses:'pass',saves:'sv',foulsCommitted:'fc',foulsSuffered:'fs',yellowCards:'y',redCards:'r'};
+function mergePlayers(){
+  const players={};
+  Object.keys(STATS.leaders).forEach(cat=>{ const key=SMAP[cat]; if(!key) return;
+    (STATS.leaders[cat]||[]).forEach(r=>{
+      const p=players[r.id]||(players[r.id]={id:r.id,n:r.n,tm:r.tm,ab:r.ab,pos:r.pos,min:(MIN[r.id]||{}).min||0,g:0,a:0,sot:0,sh:0,pass:0,sv:0,fc:0,fs:0,y:0,r:0});
+      p[key]=r.v; if(!p.tm&&r.tm)p.tm=r.tm; if(!p.pos&&r.pos)p.pos=r.pos;
+    });
+  });
+  return Object.values(players);
+}
+let SORT={key:'g',dir:-1}, FILTER='', PER90=false;
+const COLS=[{k:'n',l:'Player',t:'l'},{k:'tm',l:'Country',t:'l'},{k:'pos',l:'Pos',t:'l'},{k:'min',l:'Min'},{k:'g',l:'G'},{k:'a',l:'A'},{k:'sot',l:'SOT'},{k:'sh',l:'Sh'},{k:'pass',l:'Pass'},{k:'sv',l:'Sv'},{k:'fc',l:'FC'},{k:'fs',l:'FS'},{k:'y',l:'Y'},{k:'r',l:'R'}];
+const P90={g:1,a:1,sot:1,sh:1,pass:1,sv:1,fc:1,fs:1,y:1,r:1};
+function cellVal(p,k){ if(PER90&&P90[k]) return p.min>0?(p[k]/p.min*90):null; return p[k]; }
+function fmtVal(v,k){ if(v==null) return '\u2013'; if(PER90&&P90[k]) return (Math.round(v*100)/100).toFixed(2); return v||''; }
+function renderLeaderTable(){
+  let rows=mergePlayers();
+  if(FILTER){const f=FILTER.toLowerCase(); rows=rows.filter(p=>(p.n||'').toLowerCase().includes(f)||(p.tm||'').toLowerCase().includes(f));}
+  rows.sort((a,b)=>{const k=SORT.key;
+    if(k==='n'||k==='tm'||k==='pos'){const va=(a[k]||'').toString().toLowerCase(),vb=(b[k]||'').toString().toLowerCase(); return ((va<vb?-1:(va>vb?1:0))*SORT.dir)||pinCmp(a,b);}
+    let va=cellVal(a,k),vb=cellVal(b,k); va=(va==null?-1:va); vb=(vb==null?-1:vb);
+    return ((va-vb)*SORT.dir)||pinCmp(a,b);});
+  const head=COLS.map(c=>'<th class="'+(c.t==='l'?'l ':'')+(SORT.key===c.k?'sorted':'')+'" onclick="sortBy(\''+c.k+'\')">'+c.l+(SORT.key===c.k?(' '+(SORT.dir<0?'\u25BC':'\u25B2')):'')+'</th>').join('');
+  const body=rows.map(p=>'<tr>'+COLS.map(c=>{
+    if(c.k==='n') return '<td class="l player"><span class="flag">'+flag(p.tm)+'</span>'+(p.n||'')+'</td>';
+    if(c.k==='tm') return '<td class="l">'+(p.tm||'')+'</td>';
+    if(c.k==='pos') return '<td class="l">'+(p.pos||'')+'</td>';
+    if(c.k==='min') return '<td>'+(p.min||0)+'</td>';
+    const v=cellVal(p,c.k); return '<td class="'+(SORT.key===c.k&&v?'hot':'')+'">'+fmtVal(v,c.k)+'</td>';
+  }).join('')+'</tr>').join('');
+  document.getElementById('leaderTable').innerHTML='<table class="ltable"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table>';
+  document.getElementById('leaderMeta').textContent=rows.length+' players'+(PER90?' \u00B7 per 90 min':'');
+}
+function sortBy(k){ if(SORT.key===k){SORT.dir*=-1;} else {SORT.key=k; SORT.dir=(k==='n'||k==='tm'||k==='pos')?1:-1;} renderLeaderTable(); }
+function filterPlayers(v){ FILTER=v; renderLeaderTable(); }
+function togglePer90(){ PER90=!PER90; const b=document.getElementById('p90btn'); if(b)b.classList.toggle('on',PER90); renderLeaderTable(); }
+
+const pnum=v=>{const n=parseFloat(v); return isNaN(n)?0:n;};
+function aggregateTeams(){
+  const T={}; const get=tm=>T[tm]||(T[tm]={tm,p:0,gf:0,ga:0,_ps:0,_pn:0,sh:0,sog:0,cor:0,fouls:0,y:0,r:0});
+  DATA.events.forEach(e=>{ if(e.state!=='post'&&e.state!=='in')return;
+    const H=get(norm(e.home)), A=get(norm(e.away));
+    H.p++;A.p++; H.gf+=e.hs||0;H.ga+=e.as||0; A.gf+=e.as||0;A.ga+=e.hs||0;
+    const acc=(s,st)=>{ if(!st)return; const po=parseFloat(st.pos); if(!isNaN(po)){s._ps+=po;s._pn++;} s.sh+=pnum(st.sh);s.sog+=pnum(st.sog);s.cor+=pnum(st.cor);s.fouls+=pnum(st.fouls); };
+    acc(H,e.sh_h); acc(A,e.sh_a);
+    (e.ev||[]).forEach(x=>{ const s=x.side==='a'?A:(x.side==='h'?H:null); if(!s)return; if(x.y)s.y++; if(x.r)s.r++; });
+  });
+  return Object.values(T).map(t=>({tm:t.tm,p:t.p,gf:t.gf,ga:t.ga,gd:t.gf-t.ga,poss:t._pn?Math.round(t._ps/t._pn*10)/10:0,sh:t.sh,sog:t.sog,cor:t.cor,fouls:t.fouls,y:t.y,r:t.r}));
+}
+let TSORT={key:'gf',dir:-1};
+const TCOLS=[{k:'tm',l:'Country',t:'l'},{k:'p',l:'P'},{k:'gf',l:'GF'},{k:'ga',l:'GA'},{k:'gd',l:'GD'},{k:'poss',l:'Poss%'},{k:'sh',l:'Sh'},{k:'sog',l:'SOT'},{k:'cor',l:'Cor'},{k:'fouls',l:'Fouls'},{k:'y',l:'Y'},{k:'r',l:'R'}];
+function renderTeamTable(){
+  let rows=aggregateTeams();
+  rows.sort((a,b)=>{const k=TSORT.key; if(k==='tm'){return (a.tm<b.tm?-1:(a.tm>b.tm?1:0))*TSORT.dir;} return ((a[k]||0)-(b[k]||0))*TSORT.dir;});
+  const head=TCOLS.map(c=>'<th class="'+(c.t==='l'?'l ':'')+(TSORT.key===c.k?'sorted':'')+'" onclick="sortTeam(\''+c.k+'\')">'+c.l+(TSORT.key===c.k?(' '+(TSORT.dir<0?'\u25BC':'\u25B2')):'')+'</th>').join('');
+  const body=rows.map(t=>'<tr>'+TCOLS.map(c=>{
+    if(c.k==='tm')return '<td class="l player"><span class="flag">'+flag(t.tm)+'</span>'+t.tm+'</td>';
+    if(c.k==='gd')return '<td class="'+(TSORT.key==='gd'?'hot':'')+'">'+(t.gd>0?'+':'')+t.gd+'</td>';
+    if(c.k==='poss')return '<td class="'+(TSORT.key==='poss'?'hot':'')+'">'+(t.poss||'\u2013')+'</td>';
+    const v=t[c.k]; return '<td class="'+(TSORT.key===c.k&&v?'hot':'')+'">'+(v||0)+'</td>';
+  }).join('')+'</tr>').join('');
+  document.getElementById('teamTable').innerHTML='<table class="ltable"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table>';
+}
+function sortTeam(k){ if(TSORT.key===k){TSORT.dir*=-1;} else {TSORT.key=k; TSORT.dir=(k==='tm')?1:-1;} renderTeamTable(); }
+
+function renderKeepers(){
+  const box=document.getElementById('keeperBox'); if(!box) return;
+  const keepers=(STATS.leaders.saves||[]).filter(r=>r.v>0);
+  const top=keepers.slice(0,10), max=top.length?Math.max(1,top[0].v):1, busiest=top[0];
+  const D={};
+  DATA.events.forEach(e=>{ if(e.state!=='post') return;
+    const add=(tm,ga)=>{ const d=D[tm]||(D[tm]={tm,p:0,ga:0,cs:0}); d.p++; d.ga+=ga; if(ga===0) d.cs++; };
+    add(e.home, e.as||0); add(e.away, e.hs||0);
+  });
+  const def=Object.values(D).sort((a,b)=> b.cs-a.cs || a.ga-b.ga || b.p-a.p).slice(0,10);
+  const savesList=top.map((r,i)=>'<div class="bootrow"><span class="rk">'+(i+1)+'</span><span class="flag">'+flag(r.tm)+'</span><span class="nm">'+(r.n||'')+'</span><div class="track"><div class="fill gk" style="width:'+(r.v/max*100)+'%"></div></div><span class="val">'+r.v+'</span></div>').join('');
+  const defRows=def.map(d=>'<div class="kdrow"><span class="flag">'+flag(d.tm)+'</span><span class="nm">'+d.tm+'</span><span class="kcs">'+d.cs+'</span><span class="kga">'+d.ga+'</span><span class="kp">'+d.p+'</span></div>').join('');
+  box.innerHTML=(busiest?'<div class="kcallout"><div class="kc-l">Busiest<br>keeper</div><div class="kc-m"><span class="flag">'+flag(busiest.tm)+'</span><b>'+busiest.n+'</b></div><div class="kc-r">'+busiest.v+'<span>saves</span></div></div>':'')
+    +'<div class="kgrid"><div class="kcol"><div class="kcolh">Most saves</div>'+(savesList||'<div class="note">No data yet.</div>')+'</div>'
+    +'<div class="kcol"><div class="kcolh">Stingiest defenses <span class="kleg">CS&nbsp;/&nbsp;GA&nbsp;/&nbsp;P</span></div>'+(defRows||'<div class="note">No data yet.</div>')+'</div></div>';
+}
+function renderUpsets(){
+  const box=document.getElementById('upsetBox'); if(!box) return;
+  const rows=[];
+  DATA.events.forEach(e=>{ if(e.state!=='post') return; const od=ODDS[e.id]; if(!od) return;
+    const o=e.hs>e.as?'h':(e.as>e.hs?'a':'d'); const prob=od[o]; if(prob==null) return;
+    rows.push({e,o,prob});
+  });
+  rows.sort((a,b)=> a.prob-b.prob);
+  const top=rows.slice(0,8);
+  if(!top.length){ box.innerHTML='<div class="note">No finished games with odds yet.</div>'; return; }
+  box.innerHTML=top.map(function(x){ const e=x.e,o=x.o,prob=x.prob;
+    const score=norm(e.home)+' '+e.hs+'\u2013'+e.as+' '+norm(e.away);
+    const wflag=o==='d'?'':('<span class="flag">'+flag(o==='h'?e.home:e.away)+'</span>');
+    const win=o==='d'?'Draw':((o==='h'?norm(e.home):norm(e.away))+' won');
+    return '<div class="uprow"><div class="up-l"><div class="up-score">'+score+'</div><div class="up-win">'+wflag+win+'</div></div><div class="up-prob"><div class="up-pct">'+prob+'%</div><div class="up-lbl">pre-match</div></div></div>';
+  }).join('');
+}
+function renderStats(){ renderPulse(); renderBoot(); renderPerStat(); renderKeepers(); renderUpsets(); renderTeamTable(); renderLeaderTable(); }
+// ================ END STATS PAGE ================
+
+
+/* ===================== PREDICT (pick'em) ===================== */
+const PSTORE={
+  async get(k){ try{ if(typeof window!=='undefined'&&window.storage){const r=await window.storage.get(k); if(r&&r.value) return JSON.parse(r.value);} }catch(e){}
+    try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){} return null; },
+  async set(k,v){ const s=JSON.stringify(v);
+    try{ if(typeof window!=='undefined'&&window.storage){ await window.storage.set(k,s); } }catch(e){}
+    try{ localStorage.setItem(k,s); }catch(e){} }
+};
+let PRED={name:'',picks:{}}, FRIENDS=[];
+async function loadPred(){ const a=await PSTORE.get('wc_pred'); if(a&&a.picks) PRED=a;
+  const f=await PSTORE.get('wc_friends'); if(Array.isArray(f)) FRIENDS=f;
+  const ni=document.getElementById('predNameInput'); if(ni&&PRED.name) ni.value=PRED.name; renderPredict(); }
+function savePred(){ PSTORE.set('wc_pred',PRED); }
+function saveFriends(){ PSTORE.set('wc_friends',FRIENDS); }
+function predName(v){ PRED.name=(v||'').slice(0,24); savePred(); renderPredictBoard(); }
+const outcomeOf=e=> e.hs>e.as?'h':(e.as>e.hs?'a':'d');
+function pickable(e){ return KNOWN.has(e.home)&&KNOWN.has(e.away); }
+function scorePicks(picks){ let pts=0,correct=0,total=0;
+  DATA.events.forEach(e=>{ if(e.state!=='post'||!pickable(e)) return; const p=picks[e.id]; if(!p) return;
+    const o=outcomeOf(e); if(e.ko&&o==='d') return; total++; if(p===o){correct++; pts+=3;} });
+  return {pts,correct,total};
+}
+function setPick(id,o){ const e=DATA.events.find(x=>x.id===id); if(!e||e.state!=='pre') return; PRED.picks[id]=o; savePred(); renderPredict(); }
+function predEnc(obj){ try{ return btoa(unescape(encodeURIComponent(JSON.stringify(obj)))); }catch(e){ return ''; } }
+function predDec(code){ try{ return JSON.parse(decodeURIComponent(escape(atob((code||'').trim())))); }catch(e){ return null; } }
+function shareMyPicks(){ const code=predEnc({n:PRED.name||'Player',p:PRED.picks});
+  const done=()=>{ const b=document.getElementById('shareBtn'); if(b){const t=b.textContent; b.textContent='Copied!'; setTimeout(()=>{b.textContent=t;},1500);} };
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(code).then(done,()=>prompt('Copy your picks code:',code)); }
+  else prompt('Copy your picks code:',code);
+}
+function addFriendFromInput(){ const i=document.getElementById('predCode'); if(!i) return; const d=predDec(i.value);
+  if(!d||!d.p){ i.classList.add('bad'); setTimeout(()=>i.classList.remove('bad'),1200); return; }
+  const nm=(d.n||'Player').slice(0,24); FRIENDS=FRIENDS.filter(f=>f.name!==nm); FRIENDS.push({name:nm,picks:d.p}); saveFriends(); i.value=''; renderPredict(); }
+function removeFriend(nm){ FRIENDS=FRIENDS.filter(f=>f.name!==nm); saveFriends(); renderPredict(); }
+function renderPredictBoard(){
+  const box=document.getElementById('predBoard'); if(!box) return;
+  const rows=[{name:(PRED.name||'You'),picks:PRED.picks,me:true}].concat(FRIENDS.map(f=>({name:f.name,picks:f.picks,me:false})));
+  rows.forEach(r=>{ const s=scorePicks(r.picks); r.pts=s.pts; r.correct=s.correct; r.total=s.total; });
+  rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct);
+  const lb=rows.map((r,i)=>'<div class="lbrow'+(r.me?' me':'')+'"><span class="rk">'+(i+1)+'</span><span class="who">'+r.name+(r.me?' <span class="youtag">you</span>':'')+'</span><span class="rec">'+r.correct+'/'+r.total+'</span><span class="pp">'+r.pts+'<span class="u">pts</span></span>'+(r.me?'':'<button class="rmf" onclick="removeFriend(\''+(r.name||'').replace(/[^A-Za-z0-9 ]/g,'')+'\')">\u00D7</button>')+'</div>').join('');
+  box.innerHTML='<div class="lbcard"><div class="lbhead">Leaderboard <span class="hint">3 pts per correct result</span></div>'+lb
+    +'<div class="pbtns"><button id="shareBtn" class="pbtn solid" onclick="shareMyPicks()">Copy my picks</button>'
+    +'<div class="addrow"><input id="predCode" type="text" placeholder="Paste a teammate\u2019s code" /><button class="pbtn" onclick="addFriendFromInput()">Add</button></div></div></div>';
+}
+function predMatchCard(e){
+  const d=new Date(e.utc); const when=new Intl.DateTimeFormat('en-US',{timeZone:TZ,weekday:'short',hour:'numeric',minute:'2-digit'}).format(d);
+  const stage=e.ko?'Knockout':('Group '+(e.group||''));
+  const pk=PRED.picks[e.id];
+  const btn=(o,label,fl)=>'<button class="pk '+(pk===o?'sel':'')+'" onclick="setPick(\''+e.id+'\',\''+o+'\')">'+(fl?'<span class="flag">'+flag(fl)+'</span>':'')+'<span class="pl">'+label+'</span></button>';
+  const ctrl = e.ko
+    ? '<div class="pkrow ko">'+btn('h',norm(e.home),e.home)+btn('a',norm(e.away),e.away)+'</div>'
+    : '<div class="pkrow">'+btn('h',norm(e.home),e.home)+btn('d','Draw',null)+btn('a',norm(e.away),e.away)+'</div>';
+  return '<div class="pmatch"><div class="pm-top"><span class="stage">'+stage+'</span><span class="time">'+when+'</span></div>'+ctrl+'</div>';
+}
+function renderPredictList(){
+  const box=document.getElementById('predList'); if(!box) return;
+  const up=DATA.events.filter(e=>e.state==='pre'&&pickable(e)).sort((a,b)=>new Date(a.utc)-new Date(b.utc));
+  const days={}; up.forEach(e=>{const k=dayNum(new Date(e.utc)); (days[k]=days[k]||[]).push(e);});
+  const keys=Object.keys(days).sort(); let html='';
+  if(!keys.length) html+='<div class="note">No upcoming matches to pick right now.</div>';
+  keys.forEach(k=>{ html+='<div class="pday"><div class="daylabel">'+dayLabel(new Date(days[k][0].utc))+'<span></span></div>'+days[k].map(predMatchCard).join('')+'</div>'; });
+  const settled=DATA.events.filter(e=>e.state==='post'&&pickable(e)&&PRED.picks[e.id]).sort((a,b)=>new Date(b.utc)-new Date(a.utc));
+  if(settled.length){
+    const rows=settled.map(e=>{ const o=outcomeOf(e); const p=PRED.picks[e.id]; const skip=e.ko&&o==='d'; const ok=!skip&&p===o;
+      const pl=p==='d'?'Draw':(p==='h'?norm(e.home):norm(e.away));
+      return '<div class="srow '+(skip?'':(ok?'ok':'no'))+'"><span class="sc">'+norm(e.home)+' '+e.hs+'\u2013'+e.as+' '+norm(e.away)+'</span><span class="mypick">picked '+pl+'</span><span class="mark">'+(skip?'\u2013':(ok?'\u2713':'\u2717'))+'</span></div>'; }).join('');
+    html+='<details class="settled"><summary>Your settled picks <span class="cnt">'+settled.length+'</span></summary>'+rows+'</details>';
+  }
+  box.innerHTML=html;
+}
+function renderPredict(){ renderPredictBoard(); renderPredictList(); }
+
+paint();
+loadSchedule(false);
+fetchLeaders();
+liveTick();
+loadPred();
+tickCountdown(); setInterval(tickCountdown,1000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ clearTimeout(liveTimer); liveTick(); } });
+</script>
+</body>
+</html>
