@@ -418,6 +418,9 @@
   .tgsteps b{color:var(--ink)}
   .tgmini{margin-bottom:14px}
   .pbtn.ghost{background:transparent}
+  .pkstat{display:block; font-size:11.5px; font-weight:700; color:var(--muted); margin-top:8px; min-height:15px; letter-spacing:.2px}
+  .pkstat.saved{color:var(--win)}
+  .pkstat.err{color:var(--loss)}
 </style>
 </head>
 <body>
@@ -1076,7 +1079,7 @@ const TG_BOT='SCHM1NK_SoccerPicks_Bot';
 const PICK_GRACE_DAY='2026-06-21'; // Central calendar day (YYYY-MM-DD) whose matches stay pickable even after kickoff; matches on later days lock at their own kickoff
 let sb=null;
 try{ sb = window.supabase.createClient(SB_URL, SB_KEY, { db:{schema:'worldcup'}, auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } }); }catch(e){ console.warn('supabase init failed', e); }
-let ME=null, MYNAME='', MYPICKS={}, ALLPICKS=[], PLAYERS={}, MYSUB=false, predRefreshTimer=null, nameTimer=null, realtimeSub=null, rtDebounce=null, TG_DISMISSED=false;
+let ME=null, MYNAME='', MYPICKS={}, ALLPICKS=[], PLAYERS={}, MYSUB=false, predRefreshTimer=null, nameTimer=null, realtimeSub=null, rtDebounce=null, TG_DISMISSED=false, PICK_FLASH={};
 try{ TG_DISMISSED = localStorage.getItem('wc_tg_dismissed')==='1'; }catch(e){}
 
 const outcomeOf=e=> e.hs>e.as?'h':(e.as>e.hs?'a':'d');
@@ -1145,11 +1148,28 @@ async function loadPredData(){ if(!sb||!ME) return;
 async function setPick(id,o){
   if(!ME){ const a=document.getElementById('suFirst')||document.getElementById('predEmail'); if(a) a.focus(); return; }
   const e=DATA.events.find(x=>x.id===id); if(!e||!sb||!pickOpen(e)) return;
-  MYPICKS[id]=o;
+  const prev=MYPICKS[id];
+  if(prev===o){ return; }
+  // optimistic update + "saving" state
+  MYPICKS[id]=o; PICK_FLASH[id]='saving';
   const ix=ALLPICKS.findIndex(x=>x.player_email===ME&&x.match_id===id);
   if(ix>=0) ALLPICKS[ix].pick=o; else ALLPICKS.push({player_email:ME,match_id:id,pick:o});
   renderPredict();
-  try{ await sb.from('picks').upsert({ player_email:ME, match_id:id, pick:o }, { onConflict:'player_email,match_id' }); }catch(err){ console.warn('setPick', err); }
+  let error=null;
+  try{ const r=await sb.from('picks').upsert({ player_email:ME, match_id:id, pick:o }, { onConflict:'player_email,match_id' }); error=r&&r.error; }
+  catch(err){ error=err; }
+  if(error){
+    console.warn('setPick failed', error);
+    // revert optimistic change so the UI never shows an uncommitted pick
+    if(prev===undefined){ delete MYPICKS[id]; const j=ALLPICKS.findIndex(x=>x.player_email===ME&&x.match_id===id); if(j>=0) ALLPICKS.splice(j,1); }
+    else { MYPICKS[id]=prev; const j=ALLPICKS.findIndex(x=>x.player_email===ME&&x.match_id===id); if(j>=0) ALLPICKS[j].pick=prev; }
+    PICK_FLASH[id]='err:Not saved — tap to retry';
+    renderPredict();
+  } else {
+    PICK_FLASH[id]='saved';
+    renderPredict();
+    setTimeout(()=>{ if(PICK_FLASH[id]==='saved'){ delete PICK_FLASH[id]; renderPredict(); } }, 2500);
+  }
 }
 
 /* Telegram opt-in: optional guided step after sign-up */
@@ -1205,7 +1225,12 @@ function predMatchCard(e){
   const ctrl = e.ko
     ? '<div class="pkrow ko">'+btn('h',norm(e.home),e.home)+btn('a',norm(e.away),e.away)+'</div>'
     : '<div class="pkrow">'+btn('h',norm(e.home),e.home)+btn('d','Draw',null)+btn('a',norm(e.away),e.away)+'</div>';
-  return '<div class="pmatch"><div class="pm-top"><span class="stage">'+stage+'</span><span class="time">'+when+'</span></div>'+ctrl+'</div>';
+  const fst=PICK_FLASH[e.id];
+  const stat = fst==='saving' ? '<span class="pkstat">Saving…</span>'
+    : fst==='saved' ? '<span class="pkstat saved">Saved ✓</span>'
+    : (fst&&fst.indexOf('err:')===0) ? '<span class="pkstat err">'+fst.slice(4)+'</span>'
+    : (pk?'<span class="pkstat saved">Saved ✓</span>':'<span class="pkstat"></span>');
+  return '<div class="pmatch"><div class="pm-top"><span class="stage">'+stage+'</span><span class="time">'+when+'</span></div>'+ctrl+stat+'</div>';
 }
 function renderPredictList(){
   const box=document.getElementById('predList'); if(!box) return;
