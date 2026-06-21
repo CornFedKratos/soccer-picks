@@ -1,1 +1,8 @@
 .DS_Store
+
+# Internal handoff + build sources (kept local, not published)
+_handoff/
+World Cup 2026 Board.html
+worldcup-board-handoff.zip
+CLAUDE_CODE_HANDOFF.md
+CLAUDE_DESIGN_HANDOFF.md

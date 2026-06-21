@@ -1,11 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
+<html lang="en"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>World Cup 2026 — Live Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800;900&family=Archivo+Expanded:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -321,28 +320,153 @@
   .ltable tr:hover td{background:rgba(52,227,200,.04)}
   .ltable td.hot{color:var(--gold); font-weight:800}
   @media(max-width:600px){ .mark{font-size:17px} body{font-size:14px} }
+
+  /* ===================== APP SHELL: per-page router + hamburger drawer ===================== */
+  header .topbar{flex-wrap:nowrap; gap:10px; padding:11px 0}
+  .hambtn{display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; flex:0 0 auto; margin-left:-9px; background:transparent; border:none; border-radius:10px; color:var(--ink); cursor:pointer; transition:background .15s}
+  .hambtn:hover{background:var(--panel2)}
+  .hambtn:active{transform:translateY(1px)}
+  .hambtn:focus-visible{outline:2px solid var(--cyan); outline-offset:2px}
+  .hambtn svg{width:23px; height:23px}
+  .hcluster{display:flex; align-items:center; gap:10px; flex:0 0 auto; min-width:0}
+  .livedot.islive{color:var(--live)}
+  .livedot.islive i{background:var(--live); box-shadow:0 0 0 0 rgba(255,59,87,.55); animation:pulseR 1.5s infinite}
+  @keyframes pulseR{0%{box-shadow:0 0 0 0 rgba(255,59,87,.5)}70%{box-shadow:0 0 0 8px rgba(255,59,87,0)}100%{box-shadow:0 0 0 0 rgba(255,59,87,0)}}
+  .refresh.icon{padding:0; width:40px; height:40px; flex:0 0 auto; justify-content:center; background:var(--panel2); color:var(--ink); border:1px solid var(--line)}
+  .refresh.icon:hover{filter:none; background:var(--panel); border-color:var(--cyan)}
+  .refresh.icon svg{width:16px; height:16px}
+
+  .scrim{position:fixed; inset:0; background:rgba(4,6,12,.6); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); opacity:0; pointer-events:none; transition:opacity .2s ease; z-index:90}
+  .scrim.show{opacity:1; pointer-events:auto}
+  .drawer{position:fixed; top:0; left:0; bottom:0; width:min(84vw,322px); background:var(--panel); border-right:1px solid var(--line); box-shadow:2px 0 30px rgba(0,0,0,.45); z-index:100; transform:translateX(-101%); transition:transform .2s ease; display:flex; flex-direction:column}
+  .drawer.open{transform:translateX(0)}
+  .drawer-head{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:16px 14px 16px 18px; border-bottom:1px solid var(--line)}
+  .dclose{display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; flex:0 0 auto; background:transparent; border:none; border-radius:9px; color:var(--muted); cursor:pointer; transition:background .15s,color .15s}
+  .dclose:hover{background:var(--panel2); color:var(--ink)}
+  .dclose:focus-visible{outline:2px solid var(--cyan); outline-offset:2px}
+  .dclose svg{width:20px; height:20px}
+  .drawer-live{display:flex; align-items:center; gap:8px; padding:11px 18px; font-size:12px; font-weight:600; color:var(--cyan); border-bottom:1px solid var(--line)}
+  .drawer-live i{width:7px; height:7px; border-radius:50%; background:var(--live); animation:pulse2 1.2s infinite; flex:0 0 auto}
+  .drawer-live.idle{color:var(--muted)} .drawer-live.idle i{background:var(--faint); animation:none}
+  .drawer nav{flex:1 1 auto; overflow-y:auto; padding:10px}
+  .drawer nav ul{list-style:none}
+  .drawer nav li+li{margin-top:2px}
+  .drawer nav a{display:flex; align-items:center; gap:13px; padding:0 14px; min-height:50px; border-radius:11px; color:var(--muted); text-decoration:none; font-family:'Archivo',sans-serif; font-weight:700; font-size:14.5px; letter-spacing:.4px; text-transform:uppercase; border-left:3px solid transparent; transition:background .15s,color .15s}
+  .drawer nav a:hover{background:var(--panel2); color:var(--ink)}
+  .drawer nav a:focus-visible{outline:2px solid var(--cyan); outline-offset:-2px}
+  .drawer nav a.on{background:linear-gradient(90deg,rgba(52,227,200,.12),transparent); color:var(--ink); border-left-color:var(--gold)}
+  .drawer nav a .nic{display:inline-flex; width:22px; height:22px; flex:0 0 auto; color:var(--faint)}
+  .drawer nav a .nic svg{width:22px; height:22px}
+  .drawer nav a:hover .nic{color:var(--muted)}
+  .drawer nav a.on .nic{color:var(--cyan)}
+  .drawer-foot{border-top:1px solid var(--line); padding:14px 18px 18px; display:flex; flex-direction:column; gap:12px}
+  .drawer-foot .updated{font-size:11.5px; color:var(--muted)}
+  .auth .who{display:flex; align-items:center; gap:11px}
+  .auth .ava{display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px; flex:0 0 auto; border-radius:50%; background:var(--cyan); color:var(--bg); font-family:'Archivo',sans-serif; font-weight:800; font-size:16px}
+  .auth .who .nm{font-weight:700; font-size:14px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .auth .who .sub{font-size:11px; color:var(--faint)}
+  .auth .signout,.auth .authlink{display:inline-flex; align-items:center; justify-content:center; gap:6px; margin-top:10px; min-height:42px; padding:0 14px; border-radius:9px; font-family:'Inter',sans-serif; font-weight:700; font-size:13px; text-decoration:none; cursor:pointer; width:100%}
+  .auth .authlink.solid{background:var(--cyan); color:var(--bg)}
+  .auth .signout{background:var(--panel2); border:1px solid var(--line); color:var(--muted)}
+  .auth .signout:hover{color:var(--ink)}
+
+  section.page{padding-top:26px}
+  section.page[hidden]{display:none}
+  .pgfade{animation:pgIn .18s ease both}
+  @keyframes pgIn{from{opacity:0; transform:translateY(5px)} to{opacity:1; transform:none}}
+
+  @media(max-width:600px){
+    .hcd .seccol,.hcd b.sec{display:none}
+    .hcd{padding:5px 9px; font-size:13px}
+    .livedot span{display:none}
+    .livedot.islive span{display:inline}
+  }
+  @media(prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    .scrim,.drawer{transition:none}
+    .pgfade{animation:none}
+    .livedot i,.livedot.islive i,.drawer-live i,.badge-live i{animation:none}
+  }
+
+  /* ---- Predict: sign-up, auth, Telegram (Phase 1) ---- */
+  .authcard{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:14px}
+  .authh{font-family:'Archivo',sans-serif; font-weight:800; font-size:18px; color:var(--ink); margin-bottom:4px}
+  .authsub{color:var(--muted); font-size:13px; line-height:1.5; margin-bottom:14px; max-width:64ch}
+  .surow{display:flex; gap:8px; margin-bottom:8px}
+  .surow input,.addrow input{flex:1; min-width:0; font-family:'Inter',sans-serif; font-size:14px; color:var(--ink);
+    background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:11px 12px; outline:none}
+  .surow input:focus,.addrow input:focus{border-color:var(--cyan)}
+  .surow input.bad,.addrow input.bad{border-color:var(--loss); animation:shake .25s}
+  @keyframes shake{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+  .authmsg{color:var(--muted); font-size:12.5px; margin-top:10px; min-height:16px}
+  .authbar{display:flex; flex-wrap:wrap; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:14px 16px; margin-bottom:14px}
+  .authwho{font-size:13px; color:var(--muted)} .authwho b{color:var(--ink)}
+  .authbar .pname{display:flex; align-items:center; gap:8px; margin:0}
+  .authbar .pname label{font-size:12px; color:var(--faint)}
+  .authbar .pname input{font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:var(--panel2);
+    border:1px solid var(--line); border-radius:8px; padding:8px 10px; outline:none}
+  .authbar .pname input:focus{border-color:var(--cyan)}
+  .authbar .pbtn{margin-left:auto}
+  .tgcard{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px}
+  .tgcard.on{border-color:var(--win)}
+  .tgh{display:flex; align-items:center; gap:9px; font-family:'Archivo',sans-serif; font-weight:800; font-size:15px; color:var(--ink)}
+  .tgcard.on .tgh{color:var(--win)}
+  .tgi{font-size:18px; line-height:1} .tgcard.on .tgi{font-size:15px}
+  .tgsub{color:var(--muted); font-size:13px; line-height:1.5; margin:6px 0 0}
+  .tgsteps{margin:12px 0 14px 18px; padding:0; color:var(--ink); font-size:13px; line-height:1.7}
+  .tgsteps b{color:var(--ink)}
+  .tgmini{margin-bottom:14px}
+  .pbtn.ghost{background:transparent}
 </style>
 </head>
 <body>
+
 <header><div class="wrap">
   <div class="topbar">
-    <div class="mark"><span class="ball">&#9917;</span>World Cup <span class="yr">2026</span></div>
-    <div class="livedot"><i></i> <span id="liveStatus">Live Board</span></div>
-    <div class="hcd" id="cdHead" title="Until the Final · Jul 19, 2026 · MetLife Stadium"></div>
-    <div class="spacer"></div>
-    <div class="updated">Odds as of <b id="ts">&mdash;</b></div>
-    <button class="refresh" id="refreshBtn" onclick="forceRefresh()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-      Refresh odds
+    <button class="hambtn" id="menuBtn" aria-label="Menu" aria-haspopup="true" aria-expanded="false" aria-controls="drawer" onclick="openDrawer()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"></path></svg>
     </button>
+    <div class="mark"><span class="ball">⚽</span>World Cup <span class="yr">2026</span></div>
+    <div class="spacer"></div>
+    <div class="hcluster">
+      <div class="livedot" id="liveStatusWrap"><i></i> <span id="liveStatus">Live Board</span></div>
+      <div class="hcd" id="cdHead" title="Until the Final · Jul 19, 2026 · MetLife Stadium"></div>
+      <button class="refresh icon" id="refreshBtn" aria-label="Refresh odds" title="Refresh odds" onclick="forceRefresh()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>
+      </button>
+    </div>
   </div>
-  <nav><a href="#matches" class="on">Matches</a><a href="#groups">Groups</a><a href="#bracket">Bracket</a><a href="#predict">Predict</a><a href="#stats">Stats</a></nav>
 </div></header>
 
+<div class="scrim" id="scrim" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Main navigation" aria-hidden="true">
+  <div class="drawer-head">
+    <div class="mark"><span class="ball">⚽</span>World Cup <span class="yr">2026</span></div>
+    <button class="dclose" aria-label="Close menu" onclick="closeDrawer()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+    </button>
+  </div>
+  <div class="drawer-live idle" id="drawerLive"></div>
+  <nav aria-label="Primary">
+    <ul>
+      <li><a href="#/matches" data-route="matches"><span class="nic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4.5" width="18" height="16" rx="2"></rect><path d="M3 9.5h18M8 3v3M16 3v3"></path></svg></span>Matches</a></li>
+      <li><a href="#/groups" data-route="groups"><span class="nic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 10h18M3 15h18M9 4v16"></path></svg></span>Groups</a></li>
+      <li><a href="#/bracket" data-route="bracket"><span class="nic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6v5M4 19h6v-5M10 12h5M15 7v10M15 12h5"></path></svg></span>Bracket</a></li>
+      <li><a href="#/predict" data-route="predict"><span class="nic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"></circle><path d="M8.5 12l2.5 2.5L16 9"></path></svg></span>Predict</a></li>
+      <li><a href="#/stats" data-route="stats"><span class="nic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V11M12 20V5M19 20v-6M3 20h18"></path></svg></span>Stats</a></li>
+    </ul>
+  </nav>
+  <div class="drawer-foot">
+    <div class="auth" id="drawerAuth"></div>
+    <div class="updated">Odds as of <b id="ts">—</b></div>
+  </div>
+</aside>
+
 <div class="wrap">
-  <section id="matches">
+  <section id="matches" class="page">
     <div class="sec-head"><h2>Matches</h2><div>
-      <div class="sub">Kickoffs in your time (Central) &middot; results then upcoming fixtures with odds</div>
+      <div class="sub">Kickoffs in your time (Central) · results then upcoming fixtures with odds</div>
       <div class="legend">
         <span><i style="background:var(--cyan)"></i>Home win</span>
         <span><i style="background:#4a5675"></i>Draw</span>
@@ -353,16 +477,16 @@
     <div id="matchesBox"></div>
   </section>
 
-  <section id="groups">
+  <section id="groups" class="page" hidden="">
     <div class="sec-head"><h2>Groups</h2>
-      <div class="sub">Top 2 of each group advance, plus the 8 best third-place teams &middot; <b style="color:var(--win)">IN</b> clinched &middot; <b style="color:var(--loss)">OUT</b> eliminated &middot; <span style="color:var(--faint)">* = provisional via 3rd</span></div>
+      <div class="sub">Top 2 of each group advance, plus the 8 best third-place teams · <b style="color:var(--win)">IN</b> clinched · <b style="color:var(--loss)">OUT</b> eliminated · <span style="color:var(--faint)">* = provisional via 3rd</span></div>
     </div>
     <div class="groups-grid" id="groupsBox"></div>
     <div class="thirdrace" id="thirdRace"></div>
   </section>
 
-  <section id="bracket">
-    <div class="sec-head"><h2>Round of 32 &rarr; Final</h2>
+  <section id="bracket" class="page" hidden="">
+    <div class="sec-head"><h2>Round of 32 → Final</h2>
       <div class="sub">Slots fill with real teams as group positions clinch</div>
     </div>
     <div class="bracket-tabs" id="brTabs">
@@ -375,18 +499,19 @@
     <div class="bracket-scroll"><div class="bracket" id="bracketBox"></div></div>
   </section>
 
-  <section id="predict">
+  <section id="predict" class="page" hidden="">
     <div class="sec-head"><h2>Predict</h2>
-      <div class="sub">Pick winners, copy your code to a teammate, climb the leaderboard</div>
+      <div class="sub">Sign up, pick the winners, climb the shared leaderboard</div>
     </div>
-    <div class="pname"><label>Your name</label><input id="predNameInput" type="text" maxlength="24" placeholder="Enter your name" oninput="predName(this.value)"></div>
+    <div id="predAuth"></div>
+    <div id="predTg"></div>
     <div id="predBoard"></div>
     <div id="predList"></div>
   </section>
 
-  <section id="stats">
+  <section id="stats" class="page" hidden="">
     <div class="sec-head"><h2>Stats</h2>
-      <div class="sub">Tournament leaders, counters and the countdown &middot; tap any column to sort</div>
+      <div class="sub">Tournament leaders, counters and the countdown · tap any column to sort</div>
     </div>
     <div class="pulse" id="pulseBox"></div>
     <div class="subhead">Golden Boot Race <span class="hint">top scorers</span></div>
@@ -397,7 +522,7 @@
     <div id="keeperBox"></div>
     <div class="subhead">Upset Tracker <span class="hint">biggest results vs the pre-match line</span></div>
     <div id="upsetBox"></div>
-    <div class="subhead">Team Leaderboard <span class="hint">by country &middot; tap any column to sort</span></div>
+    <div class="subhead">Team Leaderboard <span class="hint">by country · tap any column to sort</span></div>
     <div class="tablewrap" id="teamTable"></div>
     <div class="subhead">All Player Leaders <span class="hint">sortable &amp; filterable</span></div>
     <div class="filterbar">
@@ -411,6 +536,7 @@
   <footer id="foot"></footer>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const TZ='America/Chicago', ONE_DAY=864e5, HOUR=36e5;
 const FLAGS={"Mexico": "🇲🇽", "South Korea": "🇰🇷", "Czechia": "🇨🇿", "South Africa": "🇿🇦", "Switzerland": "🇨🇭", "Canada": "🇨🇦", "Qatar": "🇶🇦", "Bosnia and Herzegovina": "🇧🇦", "Brazil": "🇧🇷", "Morocco": "🇲🇦", "Haiti": "🇭🇹", "USA": "🇺🇸", "Australia": "🇦🇺", "Turkiye": "🇹🇷", "Paraguay": "🇵🇾", "Germany": "🇩🇪", "Ivory Coast": "🇨🇮", "Ecuador": "🇪🇨", "Curacao": "🇨🇼", "Japan": "🇯🇵", "Netherlands": "🇳🇱", "Sweden": "🇸🇪", "Tunisia": "🇹🇳", "Belgium": "🇧🇪", "Egypt": "🇪🇬", "Iran": "🇮🇷", "New Zealand": "🇳🇿", "Cape Verde": "🇨🇻", "Saudi Arabia": "🇸🇦", "Spain": "🇪🇸", "Uruguay": "🇺🇾", "France": "🇫🇷", "Iraq": "🇮🇶", "Norway": "🇳🇴", "Senegal": "🇸🇳", "Algeria": "🇩🇿", "Argentina": "🇦🇷", "Austria": "🇦🇹", "Jordan": "🇯🇴", "Colombia": "🇨🇴", "DR Congo": "🇨🇩", "Portugal": "🇵🇹", "Uzbekistan": "🇺🇿", "Croatia": "🇭🇷", "Ghana": "🇬🇭", "Panama": "🇵🇦", "Scotland": "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿"};
@@ -654,13 +780,96 @@ function applyBracketRound(){
 }
 function paint(){
   document.getElementById('ts').textContent = DATA.fetched ? new Intl.DateTimeFormat('en-US',{timeZone:TZ,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(DATA.fetched)) : '\u2014';
-  const lc=liveCount();
-  document.getElementById('liveStatus').textContent = lc>0 ? (lc+(lc>1?' games':' game')+' in play') : 'Live Board';
+  renderShell();
   renderMatches(); renderGroups(); renderBracket(); renderPredict(); if(document.getElementById('pulseBox')) renderStats();
   document.getElementById('foot').textContent='Live scores, stats and goal timelines from ESPN, polled every 30s while games are in play. Standings recompute from real results. Odds are DraftKings lines via ESPN (home/draw/away normalized, away leg estimated). Qualification (IN/OUT) and the bracket fill in live from results; the 3rd-place race is provisional until groups finish. Built for Don.';
 }
-const links=[...document.querySelectorAll('nav a')];
-['matches','groups','bracket','predict','stats'].forEach(id=>{const ob=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)links.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+e.target.id));}),{rootMargin:'-45% 0px -50% 0px'});ob.observe(document.getElementById(id));});
+/* ===================== APP SHELL: router + hamburger drawer ===================== */
+const ROUTES=['matches','groups','bracket','predict','stats'];
+function hasAuthToken(){
+  const h=location.hash||'', s=location.search||'';
+  return /access_token=|refresh_token=|type=(magiclink|recovery|signup|invite)/.test(h) || /[?&]code=/.test(s);
+}
+function showRoute(r){
+  if(!ROUTES.includes(r)) r='matches';
+  ROUTES.forEach(id=>{ const sec=document.getElementById(id); if(!sec) return;
+    const on=(id===r); sec.hidden=!on;
+    if(on){ sec.classList.remove('pgfade'); void sec.offsetWidth; sec.classList.add('pgfade'); }
+  });
+  document.querySelectorAll('.drawer a[data-route]').forEach(a=>{
+    const on=a.getAttribute('data-route')===r;
+    a.classList.toggle('on',on);
+    if(on) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current');
+  });
+  window.scrollTo(0,0);
+}
+function route(){
+  // Preserve magic-link tokens: let the auth client consume the hash, just surface Predict.
+  if(hasAuthToken()){ showRoute('predict'); return; }
+  const m=(location.hash||'').match(/^#\/([a-z]+)/i);
+  if(!m || !ROUTES.includes(m[1])){
+    if(location.hash!=='#/matches') history.replaceState(null,'','#/matches');
+    showRoute('matches'); return;
+  }
+  showRoute(m[1]);
+}
+window.addEventListener('hashchange',route);
+
+let drawerLastFocus=null;
+function openDrawer(){
+  const d=document.getElementById('drawer'), s=document.getElementById('scrim'), b=document.getElementById('menuBtn');
+  drawerLastFocus=document.activeElement;
+  s.classList.add('show'); d.classList.add('open'); d.setAttribute('aria-hidden','false'); b.setAttribute('aria-expanded','true');
+  document.body.style.overflow='hidden';
+  const first=d.querySelector('nav a'); if(first) first.focus();
+  document.addEventListener('keydown',drawerKey,true);
+}
+function closeDrawer(){
+  const d=document.getElementById('drawer'), s=document.getElementById('scrim'), b=document.getElementById('menuBtn');
+  if(!d.classList.contains('open')) return;
+  d.classList.remove('open'); s.classList.remove('show'); d.setAttribute('aria-hidden','true'); b.setAttribute('aria-expanded','false');
+  document.body.style.overflow='';
+  document.removeEventListener('keydown',drawerKey,true);
+  if(drawerLastFocus&&drawerLastFocus.focus) drawerLastFocus.focus(); else b.focus();
+}
+function drawerKey(e){
+  if(e.key==='Escape'){ e.preventDefault(); closeDrawer(); return; }
+  if(e.key!=='Tab') return;
+  const d=document.getElementById('drawer');
+  const f=[...d.querySelectorAll('a[href],button:not([disabled])')].filter(el=>el.offsetParent!==null);
+  if(!f.length) return; const first=f[0], last=f[f.length-1];
+  if(e.shiftKey){ if(document.activeElement===first){ e.preventDefault(); last.focus(); } }
+  else { if(document.activeElement===last){ e.preventDefault(); first.focus(); } }
+}
+document.getElementById('drawer').addEventListener('click',e=>{ const a=e.target.closest('a[href^="#/"]'); if(a) closeDrawer(); });
+
+function nextLabel(utc){
+  const d=new Date(utc), today=fmtDayKey(new Date()), k=fmtDayKey(d), t=fmtTime(d);
+  if(k===today) return t;
+  if(k===fmtDayKey(new Date(Date.now()+ONE_DAY))) return 'Tmrw '+t;
+  return new Intl.DateTimeFormat('en-US',{timeZone:TZ,weekday:'short'}).format(d)+' '+t;
+}
+function renderShell(){
+  const lc=liveCount();
+  const ls=document.getElementById('liveStatus'), lw=document.getElementById('liveStatusWrap'), dl=document.getElementById('drawerLive');
+  const next=DATA.events.filter(e=>e.state==='pre').sort((a,b)=>new Date(a.utc)-new Date(b.utc))[0];
+  if(lc>0){
+    if(lw) lw.classList.add('islive'); if(ls) ls.textContent='LIVE';
+    if(dl){ dl.classList.remove('idle'); dl.innerHTML='<i></i>'+lc+(lc>1?' matches':' match')+' live now'; }
+  } else {
+    if(lw) lw.classList.remove('islive');
+    if(ls) ls.textContent = next ? ('Next '+nextLabel(next.utc)) : 'Live Board';
+    if(dl){ dl.classList.add('idle'); dl.innerHTML = next ? ('<i></i>Next kickoff '+nextLabel(next.utc)) : '<i></i>No matches scheduled'; }
+  }
+  const da=document.getElementById('drawerAuth'); if(da){
+    if(typeof ME!=='undefined' && ME){
+      const nm=(typeof MYNAME!=='undefined'&&MYNAME)? MYNAME : ME.split('@')[0];
+      da.innerHTML='<div class="who"><span class="ava">'+nm.charAt(0).toUpperCase()+'</span><div style="min-width:0"><div class="nm">'+nm+'</div><div class="sub">Signed in to pick\u2019em</div></div></div><a class="signout" href="#/predict">Manage my picks</a>';
+    } else {
+      da.innerHTML='<a class="authlink solid" href="#/predict">Sign up to play \u2192</a>';
+    }
+  }
+}
 
 
 // ================= STATS PAGE =================
@@ -721,7 +930,7 @@ function tickCountdown(){
   let ms=FINAL_UTC-new Date(); if(ms<0)ms=0;
   const d=Math.floor(ms/864e5),h=Math.floor(ms%864e5/36e5),m=Math.floor(ms%36e5/6e4),s=Math.floor(ms%6e4/1e3);
   const p=n=>String(n).padStart(2,'0');
-  el.innerHTML='<span class="hcd-l">Final</span><b>'+d+'</b><span class="u">d</span><b>'+p(h)+'</b>:<b>'+p(m)+'</b>:<b>'+p(s)+'</b>';
+  el.innerHTML='<span class="hcd-l">Final</span><b>'+d+'</b><span class="u">d</span><b>'+p(h)+'</b>:<b>'+p(m)+'</b><span class="seccol">:</span><b class="sec">'+p(s)+'</b>';
 }
 function renderPulse(){
   const t=tournamentTotals(); const denom=t.played+t.inplay; const gpm=denom?(t.goals/denom):0;
@@ -860,46 +1069,138 @@ const PSTORE={
     try{ if(typeof window!=='undefined'&&window.storage){ await window.storage.set(k,s); } }catch(e){}
     try{ localStorage.setItem(k,s); }catch(e){} }
 };
-let PRED={name:'',picks:{}}, FRIENDS=[];
-async function loadPred(){ const a=await PSTORE.get('wc_pred'); if(a&&a.picks) PRED=a;
-  const f=await PSTORE.get('wc_friends'); if(Array.isArray(f)) FRIENDS=f;
-  const ni=document.getElementById('predNameInput'); if(ni&&PRED.name) ni.value=PRED.name; renderPredict(); }
-function savePred(){ PSTORE.set('wc_pred',PRED); }
-function saveFriends(){ PSTORE.set('wc_friends',FRIENDS); }
-function predName(v){ PRED.name=(v||'').slice(0,24); savePred(); renderPredictBoard(); }
+/* ===================== PREDICT (Supabase magic-link sign-up) ===================== */
+const SB_URL='https://ckldrmyzmwnujzpxxjpt.supabase.co';
+const SB_KEY='sb_publishable_bsmzithS3xRk2_VLdBKFKg_97YqazB6';
+const TG_BOT='SCHM1NK_SoccerPicks_Bot';
+const PICK_GRACE_DAY='2026-06-21'; // Central calendar day (YYYY-MM-DD) whose matches stay pickable even after kickoff; matches on later days lock at their own kickoff
+let sb=null;
+try{ sb = window.supabase.createClient(SB_URL, SB_KEY, { db:{schema:'worldcup'}, auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } }); }catch(e){ console.warn('supabase init failed', e); }
+let ME=null, MYNAME='', MYPICKS={}, ALLPICKS=[], PLAYERS={}, MYSUB=false, predRefreshTimer=null, nameTimer=null, realtimeSub=null, rtDebounce=null, TG_DISMISSED=false;
+try{ TG_DISMISSED = localStorage.getItem('wc_tg_dismissed')==='1'; }catch(e){}
+
 const outcomeOf=e=> e.hs>e.as?'h':(e.as>e.hs?'a':'d');
 function pickable(e){ return KNOWN.has(e.home)&&KNOWN.has(e.away); }
-function scorePicks(picks){ let pts=0,correct=0,total=0;
-  DATA.events.forEach(e=>{ if(e.state!=='post'||!pickable(e)) return; const p=picks[e.id]; if(!p) return;
+function pickOpen(e){ return e.state==='pre' || dayNum(new Date(e.utc))===PICK_GRACE_DAY; }
+function scorePicksMap(map){ let pts=0,correct=0,total=0; map=map||{};
+  DATA.events.forEach(e=>{ if(e.state!=='post'||!pickable(e)) return; const p=map[e.id]; if(!p) return;
     const o=outcomeOf(e); if(e.ko&&o==='d') return; total++; if(p===o){correct++; pts+=3;} });
   return {pts,correct,total};
 }
-function setPick(id,o){ const e=DATA.events.find(x=>x.id===id); if(!e||e.state!=='pre') return; PRED.picks[id]=o; savePred(); renderPredict(); }
-function predEnc(obj){ try{ return btoa(unescape(encodeURIComponent(JSON.stringify(obj)))); }catch(e){ return ''; } }
-function predDec(code){ try{ return JSON.parse(decodeURIComponent(escape(atob((code||'').trim())))); }catch(e){ return null; } }
-function shareMyPicks(){ const code=predEnc({n:PRED.name||'Player',p:PRED.picks});
-  const done=()=>{ const b=document.getElementById('shareBtn'); if(b){const t=b.textContent; b.textContent='Copied!'; setTimeout(()=>{b.textContent=t;},1500);} };
-  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(code).then(done,()=>prompt('Copy your picks code:',code)); }
-  else prompt('Copy your picks code:',code);
+
+async function initPredictAuth(){
+  renderAuth(sb?'':'Sign-up unavailable (could not load Supabase).');
+  if(!sb) return;
+  try{ const { data:{ session } } = await sb.auth.getSession(); await onSession(session);
+       sb.auth.onAuthStateChange((_e,sess)=>{ onSession(sess); }); }
+  catch(e){ console.warn('auth init', e); }
 }
-function addFriendFromInput(){ const i=document.getElementById('predCode'); if(!i) return; const d=predDec(i.value);
-  if(!d||!d.p){ i.classList.add('bad'); setTimeout(()=>i.classList.remove('bad'),1200); return; }
-  const nm=(d.n||'Player').slice(0,24); FRIENDS=FRIENDS.filter(f=>f.name!==nm); FRIENDS.push({name:nm,picks:d.p}); saveFriends(); i.value=''; renderPredict(); }
-function removeFriend(nm){ FRIENDS=FRIENDS.filter(f=>f.name!==nm); saveFriends(); renderPredict(); }
+async function onSession(session){
+  ME = (session&&session.user&&session.user.email) ? session.user.email.toLowerCase() : null;
+  if(ME){
+    const md=(session.user&&session.user.user_metadata)||{};
+    MYNAME = md.name || [md.first_name,md.last_name].filter(Boolean).join(' ').trim() || MYNAME || ME.split('@')[0];
+    await ensurePlayer(); await loadPredData();
+    if(!predRefreshTimer) predRefreshTimer=setInterval(()=>{ if(!document.hidden&&ME) loadPredData(); },60000);
+    if(!realtimeSub){ try{ realtimeSub = sb.channel('wc_picks')
+      .on('postgres_changes',{event:'*',schema:'worldcup',table:'picks'}, ()=>{ clearTimeout(rtDebounce); rtDebounce=setTimeout(loadPredData,800); })
+      .subscribe(); }catch(e){ console.warn('realtime', e); } }
+  } else { MYPICKS={}; ALLPICKS=[]; }
+  renderAuth(); renderPredict();
+}
+async function sendMagicLink(){
+  if(!sb) return;
+  const fn=document.getElementById('suFirst'), ln=document.getElementById('suLast'), em=document.getElementById('predEmail');
+  const first=((fn&&fn.value)||'').trim(), last=((ln&&ln.value)||'').trim();
+  const email=((em&&em.value)||'').trim().toLowerCase();
+  const st=document.getElementById('predAuthMsg');
+  if(!first){ if(fn){fn.classList.add('bad'); setTimeout(()=>fn.classList.remove('bad'),1200);} if(st) st.textContent='Please enter your first name.'; return; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ if(em){em.classList.add('bad'); setTimeout(()=>em.classList.remove('bad'),1200);} if(st) st.textContent='Please enter a valid email.'; return; }
+  const name=[first,last].filter(Boolean).join(' ').slice(0,40);
+  if(st) st.textContent='Sending your sign-in link...';
+  const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: location.href.split('#')[0], data:{ name, first_name:first, last_name:last } } });
+  if(st) st.textContent = error ? ('Error: '+error.message) : ('Link sent. Check '+email+', tap the link, then come back to this tab.');
+}
+async function signOut(){ if(realtimeSub&&sb){ try{ sb.removeChannel(realtimeSub); }catch(e){} realtimeSub=null; } if(sb) await sb.auth.signOut(); ME=null; MYNAME=''; MYPICKS={}; ALLPICKS=[]; renderAuth(); renderPredict(); }
+
+async function ensurePlayer(){ if(!sb||!ME) return;
+  try{ await sb.from('players').upsert({ email:ME, display_name:(MYNAME||ME.split('@')[0]).slice(0,40) }, { onConflict:'email' }); }catch(e){ console.warn('ensurePlayer', e); } }
+async function saveDisplayName(){ const inp=document.getElementById('predNameInput'); if(!inp||!ME||!sb) return;
+  MYNAME=(inp.value||'').slice(0,40)||ME.split('@')[0];
+  try{ await sb.from('players').upsert({ email:ME, display_name:MYNAME }, { onConflict:'email' }); }catch(e){ console.warn('saveName', e); }
+  if(PLAYERS[ME]!==undefined) PLAYERS[ME]=MYNAME; renderPredictBoard(); if(typeof renderShell==='function') renderShell(); }
+function queueName(){ clearTimeout(nameTimer); nameTimer=setTimeout(saveDisplayName,700); }
+
+async function loadPredData(){ if(!sb||!ME) return;
+  try{
+    const r1=await sb.from('picks').select('player_email,match_id,pick');
+    const r2=await sb.from('players').select('email,display_name');
+    try{ const r3=await sb.from('tg_subscribers').select('active').eq('email',ME).maybeSingle(); MYSUB=!!(r3.data&&r3.data.active); }catch(_){}
+    ALLPICKS=r1.data||[]; PLAYERS={}; (r2.data||[]).forEach(p=>{ PLAYERS[p.email]=p.display_name; });
+    if(PLAYERS[ME]) MYNAME=PLAYERS[ME];
+    MYPICKS={}; ALLPICKS.forEach(x=>{ if(x.player_email===ME) MYPICKS[x.match_id]=x.pick; });
+    renderPredict();
+  }catch(e){ console.warn('loadPredData', e); }
+}
+async function setPick(id,o){
+  if(!ME){ const a=document.getElementById('suFirst')||document.getElementById('predEmail'); if(a) a.focus(); return; }
+  const e=DATA.events.find(x=>x.id===id); if(!e||!sb||!pickOpen(e)) return;
+  MYPICKS[id]=o;
+  const ix=ALLPICKS.findIndex(x=>x.player_email===ME&&x.match_id===id);
+  if(ix>=0) ALLPICKS[ix].pick=o; else ALLPICKS.push({player_email:ME,match_id:id,pick:o});
+  renderPredict();
+  try{ await sb.from('picks').upsert({ player_email:ME, match_id:id, pick:o }, { onConflict:'player_email,match_id' }); }catch(err){ console.warn('setPick', err); }
+}
+
+/* Telegram opt-in: optional guided step after sign-up */
+async function subscribeTelegram(){
+  if(!ME||!sb) return;
+  const token=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():(Date.now().toString(36)+Math.random().toString(36).slice(2));
+  try{ const { error }=await sb.from('tg_links').insert({ token, email:ME }); if(error){ console.warn('tg_links', error); return; } }catch(e){ console.warn('tg_links', e); return; }
+  window.open('https://t.me/'+TG_BOT+'?start='+encodeURIComponent(token),'_blank');
+}
+function dismissTg(){ TG_DISMISSED=true; try{ localStorage.setItem('wc_tg_dismissed','1'); }catch(e){} renderTelegram(); }
+function renderTelegram(){
+  const box=document.getElementById('predTg'); if(!box) return;
+  if(!ME){ box.innerHTML=''; return; }
+  if(MYSUB){ box.innerHTML='<div class="tgcard on"><div class="tgh"><span class="tgi">✓</span>Goal alerts are on</div><div class="tgsub">We’ll DM you on Telegram the moment a goal goes in — with the clip when it’s available. Send <b>/stop</b> to the bot anytime to turn them off.</div></div>'; return; }
+  if(TG_DISMISSED){ box.innerHTML='<div class="tgmini"><button class="pbtn" onclick="subscribeTelegram()">Get goal alerts on Telegram</button></div>'; return; }
+  box.innerHTML='<div class="tgcard"><div class="tgh"><span class="tgi">📣</span>Get goal alerts on Telegram</div>'
+    +'<div class="tgsub">Optional. Get a personal DM the instant any match scores — with the highlight clip when it’s available.</div>'
+    +'<ol class="tgsteps"><li>Tap <b>Open the bot</b> below (it opens Telegram).</li><li>Press <b>Start</b> in the chat with @'+TG_BOT+'.</li><li>Done — you’ll get a confirmation DM, then alerts from then on.</li></ol>'
+    +'<div class="pbtns"><button class="pbtn solid" onclick="subscribeTelegram()">Open the bot</button><button class="pbtn ghost" onclick="dismissTg()">Maybe later</button></div></div>';
+}
+
+function renderAuth(msg){
+  const box=document.getElementById('predAuth'); if(!box) return;
+  if(ME){
+    box.innerHTML='<div class="authbar"><div class="authwho">Signed in as <b>'+ME+'</b></div>'
+      +'<div class="pname"><label>Display name</label><input id="predNameInput" type="text" maxlength="40" value="'+(MYNAME||'').replace(/"/g,'&quot;')+'" oninput="queueName()" /></div>'
+      +'<button class="pbtn" onclick="signOut()">Sign out</button></div>';
+  } else {
+    box.innerHTML='<div class="authcard"><div class="authh">Sign up to play</div>'
+      +'<div class="authsub">No password. Enter your name and email and we’ll send a one-tap sign-in link. Your email is your identity, so only you can set your picks.</div>'
+      +'<div class="surow"><input id="suFirst" type="text" maxlength="24" placeholder="First name" autocomplete="given-name" /><input id="suLast" type="text" maxlength="24" placeholder="Last name" autocomplete="family-name" /></div>'
+      +'<div class="addrow"><input id="predEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com" /><button class="pbtn solid" onclick="sendMagicLink()">Send link</button></div>'
+      +'<div id="predAuthMsg" class="authmsg">'+(msg||'')+'</div></div>';
+  }
+}
 function renderPredictBoard(){
   const box=document.getElementById('predBoard'); if(!box) return;
-  const rows=[{name:(PRED.name||'You'),picks:PRED.picks,me:true}].concat(FRIENDS.map(f=>({name:f.name,picks:f.picks,me:false})));
-  rows.forEach(r=>{ const s=scorePicks(r.picks); r.pts=s.pts; r.correct=s.correct; r.total=s.total; });
+  if(!ME){ box.innerHTML=''; return; }
+  const byP={}; ALLPICKS.forEach(r=>{ (byP[r.player_email]=byP[r.player_email]||{})[r.match_id]=r.pick; });
+  const emails=Object.keys(PLAYERS).length?Object.keys(PLAYERS):Object.keys(byP);
+  const rows=emails.map(em=>{ const s=scorePicksMap(byP[em]); return { name:PLAYERS[em]||em.split('@')[0], me:em===ME, pts:s.pts, correct:s.correct, total:s.total }; });
   rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct);
-  const lb=rows.map((r,i)=>'<div class="lbrow'+(r.me?' me':'')+'"><span class="rk">'+(i+1)+'</span><span class="who">'+r.name+(r.me?' <span class="youtag">you</span>':'')+'</span><span class="rec">'+r.correct+'/'+r.total+'</span><span class="pp">'+r.pts+'<span class="u">pts</span></span>'+(r.me?'':'<button class="rmf" onclick="removeFriend(\''+(r.name||'').replace(/[^A-Za-z0-9 ]/g,'')+'\')">\u00D7</button>')+'</div>').join('');
-  box.innerHTML='<div class="lbcard"><div class="lbhead">Leaderboard <span class="hint">3 pts per correct result</span></div>'+lb
-    +'<div class="pbtns"><button id="shareBtn" class="pbtn solid" onclick="shareMyPicks()">Copy my picks</button>'
-    +'<div class="addrow"><input id="predCode" type="text" placeholder="Paste a teammate\u2019s code" /><button class="pbtn" onclick="addFriendFromInput()">Add</button></div></div></div>';
+  const lb=rows.map((r,i)=>'<div class="lbrow'+(r.me?' me':'')+'"><span class="rk">'+(i+1)+'</span><span class="who">'+r.name+(r.me?' <span class="youtag">you</span>':'')+'</span><span class="rec">'+r.correct+'/'+r.total+'</span><span class="pp">'+r.pts+'<span class="u">pts</span></span></div>').join('')
+    || '<div class="lbrow"><span class="who" style="color:var(--faint)">No players yet — be the first to pick</span></div>';
+  box.innerHTML='<div class="lbcard"><div class="lbhead">Leaderboard <span class="hint">3 pts per correct result · shared live</span></div>'+lb
+    +'<div class="pbtns"><button class="pbtn" onclick="loadPredData()">Refresh</button></div></div>';
 }
 function predMatchCard(e){
   const d=new Date(e.utc); const when=new Intl.DateTimeFormat('en-US',{timeZone:TZ,weekday:'short',hour:'numeric',minute:'2-digit'}).format(d);
   const stage=e.ko?'Knockout':('Group '+(e.group||''));
-  const pk=PRED.picks[e.id];
+  const pk=MYPICKS[e.id];
   const btn=(o,label,fl)=>'<button class="pk '+(pk===o?'sel':'')+'" onclick="setPick(\''+e.id+'\',\''+o+'\')">'+(fl?'<span class="flag">'+flag(fl)+'</span>':'')+'<span class="pl">'+label+'</span></button>';
   const ctrl = e.ko
     ? '<div class="pkrow ko">'+btn('h',norm(e.home),e.home)+btn('a',norm(e.away),e.away)+'</div>'
@@ -908,29 +1209,31 @@ function predMatchCard(e){
 }
 function renderPredictList(){
   const box=document.getElementById('predList'); if(!box) return;
-  const up=DATA.events.filter(e=>e.state==='pre'&&pickable(e)).sort((a,b)=>new Date(a.utc)-new Date(b.utc));
+  if(!ME){ box.innerHTML=''; return; }
+  const up=DATA.events.filter(e=>pickable(e)&&pickOpen(e)).sort((a,b)=>new Date(a.utc)-new Date(b.utc));
   const days={}; up.forEach(e=>{const k=dayNum(new Date(e.utc)); (days[k]=days[k]||[]).push(e);});
   const keys=Object.keys(days).sort(); let html='';
   if(!keys.length) html+='<div class="note">No upcoming matches to pick right now.</div>';
   keys.forEach(k=>{ html+='<div class="pday"><div class="daylabel">'+dayLabel(new Date(days[k][0].utc))+'<span></span></div>'+days[k].map(predMatchCard).join('')+'</div>'; });
-  const settled=DATA.events.filter(e=>e.state==='post'&&pickable(e)&&PRED.picks[e.id]).sort((a,b)=>new Date(b.utc)-new Date(a.utc));
+  const settled=DATA.events.filter(e=>e.state==='post'&&pickable(e)&&MYPICKS[e.id]&&!pickOpen(e)).sort((a,b)=>new Date(b.utc)-new Date(a.utc));
   if(settled.length){
-    const rows=settled.map(e=>{ const o=outcomeOf(e); const p=PRED.picks[e.id]; const skip=e.ko&&o==='d'; const ok=!skip&&p===o;
+    const rows=settled.map(e=>{ const o=outcomeOf(e); const p=MYPICKS[e.id]; const skip=e.ko&&o==='d'; const ok=!skip&&p===o;
       const pl=p==='d'?'Draw':(p==='h'?norm(e.home):norm(e.away));
-      return '<div class="srow '+(skip?'':(ok?'ok':'no'))+'"><span class="sc">'+norm(e.home)+' '+e.hs+'\u2013'+e.as+' '+norm(e.away)+'</span><span class="mypick">picked '+pl+'</span><span class="mark">'+(skip?'\u2013':(ok?'\u2713':'\u2717'))+'</span></div>'; }).join('');
+      return '<div class="srow '+(skip?'':(ok?'ok':'no'))+'"><span class="sc">'+norm(e.home)+' '+e.hs+'–'+e.as+' '+norm(e.away)+'</span><span class="mypick">picked '+pl+'</span><span class="mark">'+(skip?'–':(ok?'✓':'✗'))+'</span></div>'; }).join('');
     html+='<details class="settled"><summary>Your settled picks <span class="cnt">'+settled.length+'</span></summary>'+rows+'</details>';
   }
   box.innerHTML=html;
 }
-function renderPredict(){ renderPredictBoard(); renderPredictList(); }
+function renderPredict(){ renderTelegram(); renderPredictBoard(); renderPredictList(); if(typeof renderShell==='function') renderShell(); }
 
 paint();
+route();
 loadSchedule(false);
 fetchLeaders();
 liveTick();
-loadPred();
+initPredictAuth();
 tickCountdown(); setInterval(tickCountdown,1000);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ clearTimeout(liveTimer); liveTick(); } });
 </script>
-</body>
-</html>
+
+</body></html>
