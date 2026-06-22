@@ -421,6 +421,10 @@
   .pkstat{display:block; font-size:11.5px; font-weight:700; color:var(--muted); margin-top:8px; min-height:15px; letter-spacing:.2px}
   .pkstat.saved{color:var(--win)}
   .pkstat.err{color:var(--loss)}
+  .authalt{margin-top:12px; font-size:12.5px; color:var(--muted)}
+  .linkbtn{background:none; border:0; color:var(--cyan); font:inherit; font-weight:700; cursor:pointer; padding:0}
+  .linkbtn:hover{text-decoration:underline}
+  #predCode{letter-spacing:5px; font-weight:800; text-align:center; font-size:18px}
 </style>
 </head>
 <body>
@@ -1079,7 +1083,7 @@ const TG_BOT='SCHM1NK_SoccerPicks_Bot';
 const PICK_GRACE_DAY='2026-06-21'; // Central calendar day (YYYY-MM-DD) whose matches stay pickable even after kickoff; matches on later days lock at their own kickoff
 let sb=null;
 try{ sb = window.supabase.createClient(SB_URL, SB_KEY, { db:{schema:'worldcup'}, auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } }); }catch(e){ console.warn('supabase init failed', e); }
-let ME=null, MYNAME='', MYPICKS={}, ALLPICKS=[], PLAYERS={}, MYSUB=false, predRefreshTimer=null, nameTimer=null, realtimeSub=null, rtDebounce=null, TG_DISMISSED=false, PICK_FLASH={};
+let ME=null, MYNAME='', CODE='', MYID='', MYPICKS={}, PLAYERS={}, PICKLIST=[], MYSUB=false, predRefreshTimer=null, TG_DISMISSED=false, PICK_FLASH={};
 try{ TG_DISMISSED = localStorage.getItem('wc_tg_dismissed')==='1'; }catch(e){}
 
 const outcomeOf=e=> e.hs>e.as?'h':(e.as>e.hs?'a':'d');
@@ -1091,79 +1095,69 @@ function scorePicksMap(map){ let pts=0,correct=0,total=0; map=map||{};
   return {pts,correct,total};
 }
 
+const JOIN_KEY='wc_join';
+function loadStoredJoin(){ try{ const s=JSON.parse(localStorage.getItem(JOIN_KEY)||'null'); if(s&&s.email&&s.code) return s; }catch(e){} return null; }
+function saveJoin(){ try{ localStorage.setItem(JOIN_KEY, JSON.stringify({ email:ME, name:MYNAME, code:CODE })); }catch(e){} }
+function startPoll(){ if(predRefreshTimer) return; predRefreshTimer=setInterval(()=>{ if(!document.hidden&&ME) loadPredData(); }, 25000); }
+function stopPoll(){ if(predRefreshTimer){ clearInterval(predRefreshTimer); predRefreshTimer=null; } }
 async function initPredictAuth(){
-  renderAuth(sb?'':'Sign-up unavailable (could not load Supabase).');
-  if(!sb) return;
-  try{ const { data:{ session } } = await sb.auth.getSession(); await onSession(session);
-       sb.auth.onAuthStateChange((_e,sess)=>{ onSession(sess); }); }
-  catch(e){ console.warn('auth init', e); }
+  if(!sb){ renderAuth('Predict is unavailable (could not load Supabase).'); return; }
+  const s=loadStoredJoin();
+  if(s){ ME=s.email; MYNAME=s.name||ME.split('@')[0]; CODE=s.code; renderAuth(); await loadPredData(); startPoll(); }
+  else { renderAuth(); }
+  renderPredict();
 }
-async function onSession(session){
-  ME = (session&&session.user&&session.user.email) ? session.user.email.toLowerCase() : null;
-  if(ME){
-    const md=(session.user&&session.user.user_metadata)||{};
-    MYNAME = md.name || [md.first_name,md.last_name].filter(Boolean).join(' ').trim() || MYNAME || ME.split('@')[0];
-    await ensurePlayer(); await loadPredData();
-    if(!predRefreshTimer) predRefreshTimer=setInterval(()=>{ if(!document.hidden&&ME) loadPredData(); },60000);
-    if(!realtimeSub){ try{ realtimeSub = sb.channel('wc_picks')
-      .on('postgres_changes',{event:'*',schema:'worldcup',table:'picks'}, ()=>{ clearTimeout(rtDebounce); rtDebounce=setTimeout(loadPredData,800); })
-      .subscribe(); }catch(e){ console.warn('realtime', e); } }
-  } else { MYPICKS={}; ALLPICKS=[]; }
-  renderAuth(); renderPredict();
-}
-async function sendMagicLink(){
+async function joinLeague(){
   if(!sb) return;
-  const fn=document.getElementById('suFirst'), ln=document.getElementById('suLast'), em=document.getElementById('predEmail');
+  const fn=document.getElementById('suFirst'), ln=document.getElementById('suLast'), em=document.getElementById('predEmail'), cd=document.getElementById('predCode');
   const first=((fn&&fn.value)||'').trim(), last=((ln&&ln.value)||'').trim();
-  const email=((em&&em.value)||'').trim().toLowerCase();
+  const email=((em&&em.value)||'').trim().toLowerCase(), code=((cd&&cd.value)||'').trim();
   const st=document.getElementById('predAuthMsg');
-  if(!first){ if(fn){fn.classList.add('bad'); setTimeout(()=>fn.classList.remove('bad'),1200);} if(st) st.textContent='Please enter your first name.'; return; }
-  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ if(em){em.classList.add('bad'); setTimeout(()=>em.classList.remove('bad'),1200);} if(st) st.textContent='Please enter a valid email.'; return; }
-  const name=[first,last].filter(Boolean).join(' ').slice(0,40);
-  if(st) st.textContent='Sending your sign-in link...';
-  const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: location.href.split('#')[0], data:{ name, first_name:first, last_name:last } } });
-  if(st) st.textContent = error ? ('Error: '+error.message) : ('Link sent. Check '+email+', tap the link, then come back to this tab.');
+  const bad=(el,m)=>{ if(el){el.classList.add('bad'); setTimeout(()=>el.classList.remove('bad'),1200);} if(st) st.textContent=m; };
+  if(!first) return bad(fn,'Enter your first name.');
+  if(!last) return bad(ln,'Enter your last name.');
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return bad(em,'Enter a valid email.');
+  if(!code) return bad(cd,'Enter the league code.');
+  if(st) st.textContent='Joining…';
+  let res; try{ res=await sb.rpc('wc_join',{ p_code:code, p_email:email, p_first:first, p_last:last }); }catch(e){ if(st) st.textContent='Something went wrong, try again.'; return; }
+  if(res&&res.error){ if(st) st.textContent='Something went wrong, try again.'; return; }
+  const status=res&&res.data;
+  if(status==='bad_code') return bad(cd,'That league code is not correct.');
+  if(status==='bad_email') return bad(em,'Enter a valid email.');
+  if(status==='bad_name') return bad(fn,'Enter your name.');
+  if(status!=='ok'){ if(st) st.textContent='Could not join, try again.'; return; }
+  ME=email; MYNAME=[first,last].filter(Boolean).join(' ').slice(0,40); CODE=code; saveJoin();
+  renderAuth(); await loadPredData(); startPoll(); renderPredict();
 }
-async function signOut(){ if(realtimeSub&&sb){ try{ sb.removeChannel(realtimeSub); }catch(e){} realtimeSub=null; } if(sb) await sb.auth.signOut(); ME=null; MYNAME=''; MYPICKS={}; ALLPICKS=[]; renderAuth(); renderPredict(); }
-
-async function ensurePlayer(){ if(!sb||!ME) return;
-  try{ await sb.from('players').upsert({ email:ME, display_name:(MYNAME||ME.split('@')[0]).slice(0,40) }, { onConflict:'email' }); }catch(e){ console.warn('ensurePlayer', e); } }
-async function saveDisplayName(){ const inp=document.getElementById('predNameInput'); if(!inp||!ME||!sb) return;
-  MYNAME=(inp.value||'').slice(0,40)||ME.split('@')[0];
-  try{ await sb.from('players').upsert({ email:ME, display_name:MYNAME }, { onConflict:'email' }); }catch(e){ console.warn('saveName', e); }
-  if(PLAYERS[ME]!==undefined) PLAYERS[ME]=MYNAME; renderPredictBoard(); if(typeof renderShell==='function') renderShell(); }
-function queueName(){ clearTimeout(nameTimer); nameTimer=setTimeout(saveDisplayName,700); }
-
-async function loadPredData(){ if(!sb||!ME) return;
+function leaveLeague(){ stopPoll(); ME=null; MYNAME=''; CODE=''; MYID=''; MYPICKS={}; PICKLIST=[]; PLAYERS={}; try{ localStorage.removeItem(JOIN_KEY); }catch(e){} renderAuth(); renderPredict(); }
+async function loadPredData(){ if(!sb||!ME||!CODE) return;
   try{
-    const r1=await sb.from('picks').select('player_email,match_id,pick');
-    const r2=await sb.from('players').select('email,display_name');
-    try{ const r3=await sb.from('tg_subscribers').select('active').eq('email',ME).maybeSingle(); MYSUB=!!(r3.data&&r3.data.active); }catch(_){}
-    ALLPICKS=r1.data||[]; PLAYERS={}; (r2.data||[]).forEach(p=>{ PLAYERS[p.email]=p.display_name; });
-    if(PLAYERS[ME]) MYNAME=PLAYERS[ME];
-    MYPICKS={}; ALLPICKS.forEach(x=>{ if(x.player_email===ME) MYPICKS[x.match_id]=x.pick; });
+    const r=await sb.rpc('wc_load',{ p_code:CODE, p_email:ME });
+    if(r&&r.error){ console.warn('wc_load', r.error); return; }
+    const d=r&&r.data;
+    if(!d || d.error){ if(d&&d.error==='bad_code') leaveLeague(); return; }
+    MYID=d.me||''; PLAYERS={}; (d.players||[]).forEach(p=>{ PLAYERS[p.id]=p.name; });
+    PICKLIST=d.picks||[]; MYPICKS={}; PICKLIST.forEach(x=>{ if(x.id===MYID) MYPICKS[x.m]=x.p; });
     renderPredict();
   }catch(e){ console.warn('loadPredData', e); }
 }
 async function setPick(id,o){
-  if(!ME){ const a=document.getElementById('suFirst')||document.getElementById('predEmail'); if(a) a.focus(); return; }
+  if(!ME){ const a=document.getElementById('suFirst'); if(a) a.focus(); return; }
   const e=DATA.events.find(x=>x.id===id); if(!e||!sb||!pickOpen(e)) return;
-  const prev=MYPICKS[id];
-  if(prev===o){ return; }
+  const prev=MYPICKS[id]; if(prev===o) return;
   // optimistic update + "saving" state
   MYPICKS[id]=o; PICK_FLASH[id]='saving';
-  const ix=ALLPICKS.findIndex(x=>x.player_email===ME&&x.match_id===id);
-  if(ix>=0) ALLPICKS[ix].pick=o; else ALLPICKS.push({player_email:ME,match_id:id,pick:o});
+  const ix=PICKLIST.findIndex(x=>x.id===MYID&&x.m===id);
+  if(ix>=0) PICKLIST[ix].p=o; else if(MYID) PICKLIST.push({id:MYID,m:id,p:o});
   renderPredict();
-  let error=null;
-  try{ const r=await sb.from('picks').upsert({ player_email:ME, match_id:id, pick:o }, { onConflict:'player_email,match_id' }); error=r&&r.error; }
-  catch(err){ error=err; }
-  if(error){
-    console.warn('setPick failed', error);
-    // revert optimistic change so the UI never shows an uncommitted pick
-    if(prev===undefined){ delete MYPICKS[id]; const j=ALLPICKS.findIndex(x=>x.player_email===ME&&x.match_id===id); if(j>=0) ALLPICKS.splice(j,1); }
-    else { MYPICKS[id]=prev; const j=ALLPICKS.findIndex(x=>x.player_email===ME&&x.match_id===id); if(j>=0) ALLPICKS[j].pick=prev; }
-    PICK_FLASH[id]='err:Not saved — tap to retry';
+  let status=null, err=null;
+  try{ const r=await sb.rpc('wc_set_pick',{ p_code:CODE, p_email:ME, p_match:id, p_pick:o }); err=r&&r.error; status=r&&r.data; }
+  catch(x){ err=x; }
+  if(err || status!=='ok'){
+    console.warn('setPick failed', err||status);
+    if(prev===undefined){ delete MYPICKS[id]; const j=PICKLIST.findIndex(x=>x.id===MYID&&x.m===id); if(j>=0) PICKLIST.splice(j,1); }
+    else { MYPICKS[id]=prev; const j=PICKLIST.findIndex(x=>x.id===MYID&&x.m===id); if(j>=0) PICKLIST[j].p=prev; }
+    PICK_FLASH[id]= status==='locked' ? 'err:Locked — kickoff passed' : 'err:Not saved — tap to retry';
     renderPredict();
   } else {
     PICK_FLASH[id]='saved';
@@ -1174,10 +1168,11 @@ async function setPick(id,o){
 
 /* Telegram opt-in: optional guided step after sign-up */
 async function subscribeTelegram(){
-  if(!ME||!sb) return;
-  const token=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():(Date.now().toString(36)+Math.random().toString(36).slice(2));
-  try{ const { error }=await sb.from('tg_links').insert({ token, email:ME }); if(error){ console.warn('tg_links', error); return; } }catch(e){ console.warn('tg_links', e); return; }
-  window.open('https://t.me/'+TG_BOT+'?start='+encodeURIComponent(token),'_blank');
+  if(!ME||!sb||!CODE) return;
+  let tok=null;
+  try{ const r=await sb.rpc('wc_tg_link',{ p_code:CODE, p_email:ME }); tok=r&&r.data; }catch(e){ console.warn('tg_link', e); return; }
+  if(!tok) return;
+  window.open('https://t.me/'+TG_BOT+'?start='+encodeURIComponent(tok),'_blank');
 }
 function dismissTg(){ TG_DISMISSED=true; try{ localStorage.setItem('wc_tg_dismissed','1'); }catch(e){} renderTelegram(); }
 function renderTelegram(){
@@ -1194,27 +1189,27 @@ function renderTelegram(){
 function renderAuth(msg){
   const box=document.getElementById('predAuth'); if(!box) return;
   if(ME){
-    box.innerHTML='<div class="authbar"><div class="authwho">Signed in as <b>'+ME+'</b></div>'
-      +'<div class="pname"><label>Display name</label><input id="predNameInput" type="text" maxlength="40" value="'+(MYNAME||'').replace(/"/g,'&quot;')+'" oninput="queueName()" /></div>'
-      +'<button class="pbtn" onclick="signOut()">Sign out</button></div>';
+    box.innerHTML='<div class="authbar"><div class="authwho">Playing as <b>'+(MYNAME||ME).replace(/</g,'&lt;')+'</b></div>'
+      +'<button class="pbtn" onclick="leaveLeague()">Leave</button></div>';
   } else {
-    box.innerHTML='<div class="authcard"><div class="authh">Sign up to play</div>'
-      +'<div class="authsub">No password. Enter your name and email and we’ll send a one-tap sign-in link. Your email is your identity, so only you can set your picks.</div>'
+    box.innerHTML='<div class="authcard"><div class="authh">Join the pool</div>'
+      +'<div class="authsub">Enter your name, email, and the league code your host gave you. No password, nothing to click in your inbox.</div>'
       +'<div class="surow"><input id="suFirst" type="text" maxlength="24" placeholder="First name" autocomplete="given-name" /><input id="suLast" type="text" maxlength="24" placeholder="Last name" autocomplete="family-name" /></div>'
-      +'<div class="addrow"><input id="predEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com" /><button class="pbtn solid" onclick="sendMagicLink()">Send link</button></div>'
+      +'<div class="surow"><input id="predEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com" /><input id="predCode" type="text" inputmode="numeric" maxlength="6" placeholder="League code" /></div>'
+      +'<div class="addrow"><button class="pbtn solid" style="flex:1" onclick="joinLeague()">Join the pool</button></div>'
       +'<div id="predAuthMsg" class="authmsg">'+(msg||'')+'</div></div>';
   }
 }
 function renderPredictBoard(){
   const box=document.getElementById('predBoard'); if(!box) return;
   if(!ME){ box.innerHTML=''; return; }
-  const byP={}; ALLPICKS.forEach(r=>{ (byP[r.player_email]=byP[r.player_email]||{})[r.match_id]=r.pick; });
-  const emails=Object.keys(PLAYERS).length?Object.keys(PLAYERS):Object.keys(byP);
-  const rows=emails.map(em=>{ const s=scorePicksMap(byP[em]); return { name:PLAYERS[em]||em.split('@')[0], me:em===ME, pts:s.pts, correct:s.correct, total:s.total }; });
+  const byP={}; PICKLIST.forEach(r=>{ (byP[r.id]=byP[r.id]||{})[r.m]=r.p; });
+  const ids=Object.keys(PLAYERS).length?Object.keys(PLAYERS):Object.keys(byP);
+  const rows=ids.map(pid=>{ const s=scorePicksMap(byP[pid]); return { name:(PLAYERS[pid]||'Player'), me:pid===MYID, pts:s.pts, correct:s.correct, total:s.total }; });
   rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct);
-  const lb=rows.map((r,i)=>'<div class="lbrow'+(r.me?' me':'')+'"><span class="rk">'+(i+1)+'</span><span class="who">'+r.name+(r.me?' <span class="youtag">you</span>':'')+'</span><span class="rec">'+r.correct+'/'+r.total+'</span><span class="pp">'+r.pts+'<span class="u">pts</span></span></div>').join('')
+  const lb=rows.map((r,i)=>'<div class="lbrow'+(r.me?' me':'')+'"><span class="rk">'+(i+1)+'</span><span class="who">'+String(r.name).replace(/</g,'&lt;')+(r.me?' <span class="youtag">you</span>':'')+'</span><span class="rec">'+r.correct+'/'+r.total+'</span><span class="pp">'+r.pts+'<span class="u">pts</span></span></div>').join('')
     || '<div class="lbrow"><span class="who" style="color:var(--faint)">No players yet — be the first to pick</span></div>';
-  box.innerHTML='<div class="lbcard"><div class="lbhead">Leaderboard <span class="hint">3 pts per correct result · shared live</span></div>'+lb
+  box.innerHTML='<div class="lbcard"><div class="lbhead">Leaderboard <span class="hint">3 pts per correct result · shared</span></div>'+lb
     +'<div class="pbtns"><button class="pbtn" onclick="loadPredData()">Refresh</button></div></div>';
 }
 function predMatchCard(e){
