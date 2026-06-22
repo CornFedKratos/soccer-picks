@@ -98,6 +98,109 @@ new_tpl, n = re.subn(r'<section id="predict".*?</section>', lambda _:NEW_SECTION
 if n != 1: fail(f"predict section replace count={n}")
 tpl = new_tpl
 
+# 4b) Inject favicon / app-icon set (World Cup trophy) into <head> ------------
+FAVICON = (
+  '</title>\n'
+  '<link rel="icon" href="/favicon.ico" sizes="any">\n'
+  '<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">\n'
+  '<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">\n'
+  '<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n'
+  '<link rel="manifest" href="/site.webmanifest">\n'
+  '<meta name="theme-color" content="#080B14">'
+)
+if '</title>' in tpl: tpl = tpl.replace('</title>', FAVICON, 1)
+
+# 4c) Bracket redesign (polished cards, connector feed, trophy image, winner highlight)
+def swap(old, new, what):
+    global tpl
+    if old not in tpl: fail(f"bracket swap miss: {what}")
+    tpl = tpl.replace(old, new, 1)
+
+swap(
+  """  .bracket-scroll{overflow-x:auto; padding-bottom:16px}
+  .bracket{display:flex; gap:26px; min-width:920px; padding:4px}
+  .round{display:flex; flex-direction:column; justify-content:space-around; gap:10px; min-width:172px}
+  .round-h{font-family:'Archivo',sans-serif; font-weight:800; font-size:11px; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); text-align:center; margin-bottom:4px}
+  .tie{background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:7px 9px; font-size:12px}
+  .tie .slot{display:flex; align-items:center; gap:7px; padding:3px 0}
+  .tie .slot .flag{font-size:13px; width:18px; text-align:center}
+  .tie .slot .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .tie .slot.tbd .nm{color:var(--faint); font-style:italic; font-size:11px; font-weight:400}
+  .tie .slot.locked .nm{font-weight:700; color:#fff}
+  .tie .vs{height:1px; background:var(--line); margin:3px 0}
+  .tie .mid{font-size:9.5px; color:var(--faint); text-align:center; letter-spacing:.3px; margin-top:3px}
+  .champ{align-self:center; margin:auto 0}
+  .champ .trophy{font-size:34px; text-align:center}
+  .champ .lbl{font-family:'Archivo Expanded'; font-weight:800; font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--gold); text-align:center; margin-top:4px}""",
+  """  .bracket-scroll{overflow-x:auto; padding-bottom:18px}
+  .bracket{display:flex; gap:34px; min-width:1010px; padding:8px 4px}
+  .round{display:flex; flex-direction:column; justify-content:space-around; gap:12px; min-width:188px}
+  .round-h{font-family:'Archivo',sans-serif; font-weight:800; font-size:10.5px; letter-spacing:1.3px; text-transform:uppercase; color:var(--gold); text-align:center; margin-bottom:8px; padding-bottom:7px; border-bottom:1px solid rgba(244,194,75,.22)}
+  .tie{position:relative; background:linear-gradient(158deg,#16213c,#0d1322); border:1px solid var(--line); border-radius:12px; padding:8px 12px 8px 14px; font-size:12px; box-shadow:0 3px 10px rgba(0,0,0,.30)}
+  .tie::before{content:''; position:absolute; left:0; top:9px; bottom:9px; width:3px; border-radius:0 3px 3px 0; background:linear-gradient(var(--cyan),var(--gold)); opacity:.55}
+  .tie.done::before{background:var(--gold); opacity:.9}
+  .tie .slot{display:flex; align-items:center; gap:8px; padding:4px 0}
+  .tie .slot .flag{font-size:15px; width:20px; text-align:center}
+  .tie .slot .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600}
+  .tie .slot .chk{font-size:11px; font-weight:800; color:var(--cyan); opacity:0}
+  .tie .slot.tbd .nm{color:var(--faint); font-style:italic; font-size:11px; font-weight:400}
+  .tie .slot.locked .nm{font-weight:700; color:#fff}
+  .tie .slot.win .nm{color:#fff; font-weight:800}
+  .tie .slot.win .chk{opacity:1}
+  .tie .vs{height:1px; background:linear-gradient(90deg,transparent,var(--line) 25%,var(--line) 75%,transparent); margin:3px 0}
+  .tie .mid{font-size:9.5px; color:var(--faint); text-align:center; letter-spacing:.3px; margin-top:3px}
+  @media(min-width:821px){
+    .round:not(:last-child) .tie::after{content:''; position:absolute; right:-34px; top:50%; width:34px; height:1px; background:var(--line); opacity:.5}
+  }
+  .champ{align-self:center; margin:auto 0; text-align:center; position:relative; padding:6px 4px}
+  .champ::before{content:''; position:absolute; left:50%; top:30px; width:130px; height:130px; transform:translateX(-50%); background:radial-gradient(circle,rgba(244,194,75,.28),transparent 68%); pointer-events:none}
+  .champ .trophy{position:relative; width:78px; height:auto; display:block; margin:0 auto; filter:drop-shadow(0 6px 16px rgba(244,194,75,.45))}
+  .champ .lbl{position:relative; font-family:'Archivo Expanded'; font-weight:800; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--gold); text-align:center; margin-top:10px}
+  .champ .who{position:relative; font-size:12.5px; font-weight:700; color:#fff; margin-top:3px}""",
+  "desktop bracket css")
+
+swap(
+  """    .tie{font-size:14.5px; padding:12px 14px; border-radius:11px}
+    .tie .slot{padding:6px 0}
+    .tie .slot .flag{font-size:17px; width:22px}
+    .tie .slot.tbd .nm{font-size:13px}
+    .tie .vs{margin:5px 0}
+    .champ{margin:18px 0 4px}
+    .champ .trophy{font-size:40px}
+  }""",
+  """    .tie{font-size:14.5px; padding:12px 14px 12px 16px; border-radius:13px}
+    .tie .slot{padding:7px 0}
+    .tie .slot .flag{font-size:18px; width:24px}
+    .tie .slot.tbd .nm{font-size:13px}
+    .tie .vs{margin:5px 0}
+    .champ{margin:20px 0 6px}
+    .champ .trophy{width:96px}
+    .champ::before{top:6px; width:170px; height:170px}
+  }""",
+  "mobile bracket css")
+
+swap(
+  """function bslot(name){
+  if(KNOWN.has(norm(name))) return '<div class="slot filled"><span class="flag">'+flag(name)+'</span><span class="nm">'+norm(name)+'</span></div>';
+  return '<div class="slot tbd"><span class="flag">\\u00B7</span><span class="nm">'+koLabel(name)+'</span></div>';
+}""",
+  """function bslot(name, win){
+  if(KNOWN.has(norm(name))) return '<div class="slot filled'+(win?' win':'')+'"><span class="flag">'+flag(name)+'</span><span class="nm">'+norm(name)+'</span><span class="chk">✓</span></div>';
+  return '<div class="slot tbd"><span class="flag">·</span><span class="nm">'+koLabel(name)+'</span></div>';
+}""",
+  "bslot")
+
+swap(
+  """function bracketTie(e){ return '<div class="tie">'+bslot(e.home)+'<div class="vs"></div>'+bslot(e.away)+'</div>'; }""",
+  """function bracketTie(e){ var done=e.state==='post'; var hw=done&&e.hs>e.as, aw=done&&e.as>e.hs; return '<div class="tie'+(done?' done':'')+'">'+bslot(e.home,hw)+'<div class="vs"></div>'+bslot(e.away,aw)+'</div>'; }
+function champWho(f){ if(!f||f.state!=='post') return ''; var w=f.hs>f.as?f.home:(f.as>f.hs?f.away:''); return (w&&KNOWN.has(norm(w)))?'<div class="who">'+norm(w)+'</div>':''; }""",
+  "bracketTie")
+
+swap(
+  """+'<div class="round" data-r="F"><div class="round-h">Final</div>'+(R.F.length?bracketTie(R.F[0]):tbdTie())+'<div class="champ"><div class="trophy">\\uD83C\\uDFC6</div><div class="lbl">Champion</div></div></div>';""",
+  """+'<div class="round" data-r="F"><div class="round-h">Final</div>'+(R.F.length?bracketTie(R.F[0]):tbdTie())+'<div class="champ"><img class="trophy" src="assets/wc-trophy.png" alt="Champion" width="78" height="78"><div class="lbl">Champion</div>'+champWho(R.F[0])+'</div></div>';""",
+  "renderBracket champ")
+
 # 5) Add the Supabase JS library before the main script -----------------------
 SUPA_CDN = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
 if tpl.count('<script>') != 1: fail(f"expected 1 inline <script>, found {tpl.count('<script>')}")
