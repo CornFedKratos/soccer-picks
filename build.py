@@ -239,8 +239,12 @@ async function fetchStandings(){
       const stx={}; (e.stats||[]).forEach(function(s){ stx[s.name]=s; });
       const rank=stx.rank?Math.round(stx.rank.value):9;
       const note=((e.note||{}).description)||'';
+      const adv=stx.advanced?Math.round(stx.advanced.value):0;
       let st='alive', shown=note;
-      if(/eliminat/i.test(note)){
+      if(adv===1){
+        // IN only when ESPN flags the team as mathematically CLINCHED (not merely currently top-2)
+        st='in'; shown=note||'Clinched a knockout spot';
+      } else if(/eliminat/i.test(note)){
         // ESPN marks every 4th-place team 'Eliminated' by current position; a team is only truly out
         // once it can no longer reach 4 points (4 pts all but guarantees a best third-place spot).
         const gp=stx.gamesPlayed?Math.round(stx.gamesPlayed.value):3, pts=stx.points?Math.round(stx.points.value):0;
@@ -248,8 +252,7 @@ async function fetchStandings(){
         if(mx<4){ st='out'; }
         else { st='alive'; shown='Still alive — can reach '+mx+' pts and contend for a best third-place spot'; }
       }
-      else if(/best\\s*8/i.test(note)) st='alive';
-      else if(/advance/i.test(note)) st='in';
+      // otherwise ALIVE: currently advancing but not yet clinched, or 3rd in the best-8 hunt
       map[key]={rank:rank, note:shown, st:st};
     }); });
     if(Object.keys(map).length){ ESPN_STAT=map; if(typeof renderGroups==='function') renderGroups(); }
@@ -326,7 +329,7 @@ swap(
 # legend wording
 swap(
   """      <div class="sub">Top 2 of each group advance, plus the 8 best third-place teams · <b style="color:var(--win)">IN</b> clinched · <b style="color:var(--loss)">OUT</b> eliminated · <span style="color:var(--faint)">* = provisional via 3rd</span></div>""",
-  """      <div class="sub">Top 2 of each group advance, plus the 8 best third-place teams · <b style="color:var(--win)">IN</b> advancing · <b style="color:var(--gold)">ALIVE</b> in the hunt · <b style="color:var(--loss)">OUT</b> eliminated · <span style="color:var(--faint)">status per official standings</span></div>""",
+  """      <div class="sub">Top 2 of each group advance, plus the 8 best third-place teams · <b style="color:var(--win)">IN</b> clinched · <b style="color:var(--gold)">ALIVE</b> in the hunt · <b style="color:var(--loss)">OUT</b> eliminated · <span style="color:var(--faint)">status per official standings</span></div>""",
   "legend")
 
 # 5) Add the Supabase JS library before the main script -----------------------
