@@ -71,7 +71,6 @@ NEW_CSS = r"""
   .authalt{margin-top:12px; font-size:12.5px; color:var(--muted)}
   .linkbtn{background:none; border:0; color:var(--cyan); font:inherit; font-weight:700; cursor:pointer; padding:0}
   .linkbtn:hover{text-decoration:underline}
-  #predCode{letter-spacing:5px; font-weight:800; text-align:center; font-size:18px}
 """
 CLOSE = '</style>'
 if CLOSE not in tpl: fail("no </style> after font swap")
