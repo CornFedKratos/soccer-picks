@@ -356,26 +356,42 @@ swap(
           who:ai?(ai.shortName||ai.displayName||''):'', nm:ai?(ai.displayName||ai.shortName||''):''};});""",
   "ev scorer full name")
 
+# Overlay authoritative play-by-play tallies (goals, yellow & red cards) onto STATS.leaders so the
+# boot, per-stat cards, AND the big leaderboard table are all real-time, not subject to ESPN leaders lag.
 swap(
   """function renderBoot(){
   const rows=sortPinned(STATS.leaders.goals||[]).slice(0,8); const max=rows.length?Math.max(1,rows[0].v):1;""",
-  """// authoritative goal tally from per-match play-by-play (real-time; not subject to ESPN leaders lag)
-function liveGoals(){
-  const map={};
+  """const nmKey=s=>String(s||'').trim().toLowerCase();
+function liveTallies(){
+  const g={},y={},r={};
   DATA.events.forEach(e=>{ if(!e.ev) return;
-    e.ev.forEach(x=>{ if(!x.g||x.og) return; const nm=String(x.nm||x.who||'').trim(); if(!nm) return;
-      const tm=x.side==='a'?e.away:e.home; const k=nm.toLowerCase();
-      if(!map[k]) map[k]={n:nm, tm:tm, v:0}; map[k].v++; });
+    e.ev.forEach(x=>{ const nm=String(x.nm||x.who||'').trim(); if(!nm) return;
+      const tm=x.side==='a'?e.away:e.home, k=nmKey(nm);
+      const bump=m=>{ if(!m[k]) m[k]={n:nm,tm:tm,v:0}; m[k].v++; };
+      if(x.g&&!x.og) bump(g); if(x.y) bump(y); if(x.r) bump(r); });
   });
-  return map;
+  return {goals:g, yellowCards:y, redCards:r};
+}
+// merge our live counts over ESPN's (laggy) leaders feed, taking the higher per player; names match (ESPN displayName both sides)
+function applyLiveLeaders(){
+  const t=liveTallies(); const idx={};
+  Object.keys(STATS.leaders||{}).forEach(cat=>{ (STATS.leaders[cat]||[]).forEach(rr=>{ const k=nmKey(rr.n); if(k&&!idx[k]) idx[k]={id:rr.id,pos:rr.pos,ab:rr.ab}; }); });
+  ['goals','yellowCards','redCards'].forEach(cat=>{
+    const m=t[cat], arr=(STATS.leaders[cat]||[]).slice(), byName={}; arr.forEach(rr=>{ byName[nmKey(rr.n)]=rr; });
+    Object.keys(m).forEach(k=>{ const lv=m[k], ex=byName[k];
+      if(ex){ if(lv.v>ex.v) ex.v=lv.v; if(!ex.tm) ex.tm=lv.tm; }
+      else { const meta=idx[k]||{}; arr.push({id:meta.id||('live-'+cat+'-'+k), n:lv.n, tm:lv.tm, ab:meta.ab, pos:meta.pos, v:lv.v}); } });
+    arr.sort((a,b)=>b.v-a.v); STATS.leaders[cat]=arr;
+  });
 }
 function renderBoot(){
-  // merge: ESPN leaders (broad) overlaid with our live count, taking the higher per player (names = ESPN displayName on both sides)
-  const base={}; (STATS.leaders.goals||[]).forEach(r=>{ base[String(r.n||'').trim().toLowerCase()]={n:r.n,tm:r.tm,v:r.v}; });
-  const live=liveGoals();
-  Object.keys(live).forEach(k=>{ const lv=live[k]; if(!base[k]||lv.v>base[k].v) base[k]={n:lv.n, tm:(base[k]&&base[k].tm)||lv.tm, v:lv.v}; });
-  const rows=sortPinned(Object.keys(base).map(k=>base[k])).slice(0,8); const max=rows.length?Math.max(1,rows[0].v):1;""",
-  "renderBoot live merge")
+  const rows=sortPinned(STATS.leaders.goals||[]).slice(0,8); const max=rows.length?Math.max(1,rows[0].v):1;""",
+  "live leaders overlay")
+
+swap(
+  """function renderStats(){ renderPulse();""",
+  """function renderStats(){ try{ applyLiveLeaders(); }catch(_){} renderPulse();""",
+  "renderStats applyLiveLeaders")
 
 # 5) Add the Supabase JS library before the main script -----------------------
 SUPA_CDN = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'

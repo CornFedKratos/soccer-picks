@@ -1011,22 +1011,31 @@ function renderPulse(){
    +'<div class="tile"><div class="big" style="color:#f1c531">'+t.y+'</div><div class="lbl">Yellow Cards</div><div class="sub">'+(t.played?(t.y/t.played).toFixed(1):'0')+' per match</div></div>'
    +'<div class="tile red"><div class="big">'+t.r+'</div><div class="lbl">Red Cards</div><div class="sub">straight &amp; 2nd yellow</div></div>';
 }
-// authoritative goal tally from per-match play-by-play (real-time; not subject to ESPN leaders lag)
-function liveGoals(){
-  const map={};
+const nmKey=s=>String(s||'').trim().toLowerCase();
+function liveTallies(){
+  const g={},y={},r={};
   DATA.events.forEach(e=>{ if(!e.ev) return;
-    e.ev.forEach(x=>{ if(!x.g||x.og) return; const nm=String(x.nm||x.who||'').trim(); if(!nm) return;
-      const tm=x.side==='a'?e.away:e.home; const k=nm.toLowerCase();
-      if(!map[k]) map[k]={n:nm, tm:tm, v:0}; map[k].v++; });
+    e.ev.forEach(x=>{ const nm=String(x.nm||x.who||'').trim(); if(!nm) return;
+      const tm=x.side==='a'?e.away:e.home, k=nmKey(nm);
+      const bump=m=>{ if(!m[k]) m[k]={n:nm,tm:tm,v:0}; m[k].v++; };
+      if(x.g&&!x.og) bump(g); if(x.y) bump(y); if(x.r) bump(r); });
   });
-  return map;
+  return {goals:g, yellowCards:y, redCards:r};
+}
+// merge our live counts over ESPN's (laggy) leaders feed, taking the higher per player; names match (ESPN displayName both sides)
+function applyLiveLeaders(){
+  const t=liveTallies(); const idx={};
+  Object.keys(STATS.leaders||{}).forEach(cat=>{ (STATS.leaders[cat]||[]).forEach(rr=>{ const k=nmKey(rr.n); if(k&&!idx[k]) idx[k]={id:rr.id,pos:rr.pos,ab:rr.ab}; }); });
+  ['goals','yellowCards','redCards'].forEach(cat=>{
+    const m=t[cat], arr=(STATS.leaders[cat]||[]).slice(), byName={}; arr.forEach(rr=>{ byName[nmKey(rr.n)]=rr; });
+    Object.keys(m).forEach(k=>{ const lv=m[k], ex=byName[k];
+      if(ex){ if(lv.v>ex.v) ex.v=lv.v; if(!ex.tm) ex.tm=lv.tm; }
+      else { const meta=idx[k]||{}; arr.push({id:meta.id||('live-'+cat+'-'+k), n:lv.n, tm:lv.tm, ab:meta.ab, pos:meta.pos, v:lv.v}); } });
+    arr.sort((a,b)=>b.v-a.v); STATS.leaders[cat]=arr;
+  });
 }
 function renderBoot(){
-  // merge: ESPN leaders (broad) overlaid with our live count, taking the higher per player (names = ESPN displayName on both sides)
-  const base={}; (STATS.leaders.goals||[]).forEach(r=>{ base[String(r.n||'').trim().toLowerCase()]={n:r.n,tm:r.tm,v:r.v}; });
-  const live=liveGoals();
-  Object.keys(live).forEach(k=>{ const lv=live[k]; if(!base[k]||lv.v>base[k].v) base[k]={n:lv.n, tm:(base[k]&&base[k].tm)||lv.tm, v:lv.v}; });
-  const rows=sortPinned(Object.keys(base).map(k=>base[k])).slice(0,8); const max=rows.length?Math.max(1,rows[0].v):1;
+  const rows=sortPinned(STATS.leaders.goals||[]).slice(0,8); const max=rows.length?Math.max(1,rows[0].v):1;
   document.getElementById('bootBox').innerHTML=rows.map((r,i)=>
    '<div class="bootrow"><span class="rk">'+(i+1)+'</span><span class="flag">'+flag(r.tm)+'</span><span class="nm">'+(r.n||'')+'</span>'
    +'<div class="track"><div class="fill" style="width:'+(r.v/max*100)+'%"></div></div><span class="val">'+r.v+'</span></div>').join('');
@@ -1142,7 +1151,7 @@ function renderUpsets(){
     return '<div class="uprow"><div class="up-l"><div class="up-score">'+score+'</div><div class="up-win">'+wflag+win+'</div></div><div class="up-prob"><div class="up-pct">'+prob+'%</div><div class="up-lbl">pre-match</div></div></div>';
   }).join('');
 }
-function renderStats(){ renderPulse(); renderBoot(); renderPerStat(); renderKeepers(); renderUpsets(); renderTeamTable(); renderLeaderTable(); }
+function renderStats(){ try{ applyLiveLeaders(); }catch(_){} renderPulse(); renderBoot(); renderPerStat(); renderKeepers(); renderUpsets(); renderTeamTable(); renderLeaderTable(); }
 // ================ END STATS PAGE ================
 
 
