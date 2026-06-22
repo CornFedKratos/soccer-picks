@@ -239,11 +239,18 @@ async function fetchStandings(){
       const stx={}; (e.stats||[]).forEach(function(s){ stx[s.name]=s; });
       const rank=stx.rank?Math.round(stx.rank.value):9;
       const note=((e.note||{}).description)||'';
-      let st='alive';
-      if(/eliminat/i.test(note)) st='out';
+      let st='alive', shown=note;
+      if(/eliminat/i.test(note)){
+        // ESPN marks every 4th-place team 'Eliminated' by current position; a team is only truly out
+        // once it can no longer reach 4 points (4 pts all but guarantees a best third-place spot).
+        const gp=stx.gamesPlayed?Math.round(stx.gamesPlayed.value):3, pts=stx.points?Math.round(stx.points.value):0;
+        const mx=pts+3*(3-gp);
+        if(mx<4){ st='out'; }
+        else { st='alive'; shown='Still alive — can reach '+mx+' pts and contend for a best third-place spot'; }
+      }
       else if(/best\\s*8/i.test(note)) st='alive';
       else if(/advance/i.test(note)) st='in';
-      map[key]={rank:rank, note:note, st:st};
+      map[key]={rank:rank, note:shown, st:st};
     }); });
     if(Object.keys(map).length){ ESPN_STAT=map; if(typeof renderGroups==='function') renderGroups(); }
   }catch(e){ console.warn('standings', e); }
