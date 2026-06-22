@@ -80,7 +80,8 @@ export default async (req) => {
       method: "PUT", headers: { "Content-Type": "video/mp4", "x-upsert": "true" }, body: mp4 });
     if (!up.ok) { await fail(`ERR: upload ${up.status} ${(await up.text()).slice(0, 120)}`); return new Response("upload failed", { status: 200 }); }
 
-    await finish(`${SB_URL}/storage/v1/object/public/reels/${outName}`);
+    // cache-bust the public URL so Telegram never serves a stale failure cached against a reused path
+    await finish(`${SB_URL}/storage/v1/object/public/reels/${outName}?c=${Date.now()}`);
     return new Response("ok", { status: 200 });
   } catch (e) {
     await fail(`ERR: ${String(e).slice(0, 200)}`);
