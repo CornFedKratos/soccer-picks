@@ -343,6 +343,40 @@ swap(
   """      <div class="sub">Top 2 of each group advance, plus the 8 best third-place teams · <b style="color:var(--win)">IN</b> clinched · <b style="color:var(--gold)">ALIVE</b> in the hunt · <b style="color:var(--loss)">OUT</b> eliminated · <span style="color:var(--faint)">status per official standings</span></div>""",
   "legend")
 
+# 4e) Golden Boot from authoritative play-by-play (ESPN's aggregate leaders endpoint lags badly
+# mid-tournament). Capture each scorer's full name, then merge a live tally over the leaders feed.
+swap(
+  """      m.ev=(c.details||[]).map(dt=>{const ai=(dt.athletesInvolved||[])[0];
+        return {min:(dt.clock||{}).displayValue||'', t:(dt.type||{}).text||'', side:idmap[(dt.team||{}).id]||'',
+          g:!!dt.scoringPlay, og:!!dt.ownGoal, pen:!!dt.penaltyKick, r:!!dt.redCard, y:!!dt.yellowCard,
+          who:ai?(ai.shortName||ai.displayName||''):''};});""",
+  """      m.ev=(c.details||[]).map(dt=>{const ai=(dt.athletesInvolved||[])[0];
+        return {min:(dt.clock||{}).displayValue||'', t:(dt.type||{}).text||'', side:idmap[(dt.team||{}).id]||'',
+          g:!!dt.scoringPlay, og:!!dt.ownGoal, pen:!!dt.penaltyKick, r:!!dt.redCard, y:!!dt.yellowCard,
+          who:ai?(ai.shortName||ai.displayName||''):'', nm:ai?(ai.displayName||ai.shortName||''):''};});""",
+  "ev scorer full name")
+
+swap(
+  """function renderBoot(){
+  const rows=sortPinned(STATS.leaders.goals||[]).slice(0,8); const max=rows.length?Math.max(1,rows[0].v):1;""",
+  """// authoritative goal tally from per-match play-by-play (real-time; not subject to ESPN leaders lag)
+function liveGoals(){
+  const map={};
+  DATA.events.forEach(e=>{ if(!e.ev) return;
+    e.ev.forEach(x=>{ if(!x.g||x.og) return; const nm=String(x.nm||x.who||'').trim(); if(!nm) return;
+      const tm=x.side==='a'?e.away:e.home; const k=nm.toLowerCase();
+      if(!map[k]) map[k]={n:nm, tm:tm, v:0}; map[k].v++; });
+  });
+  return map;
+}
+function renderBoot(){
+  // merge: ESPN leaders (broad) overlaid with our live count, taking the higher per player (names = ESPN displayName on both sides)
+  const base={}; (STATS.leaders.goals||[]).forEach(r=>{ base[String(r.n||'').trim().toLowerCase()]={n:r.n,tm:r.tm,v:r.v}; });
+  const live=liveGoals();
+  Object.keys(live).forEach(k=>{ const lv=live[k]; if(!base[k]||lv.v>base[k].v) base[k]={n:lv.n, tm:(base[k]&&base[k].tm)||lv.tm, v:lv.v}; });
+  const rows=sortPinned(Object.keys(base).map(k=>base[k])).slice(0,8); const max=rows.length?Math.max(1,rows[0].v):1;""",
+  "renderBoot live merge")
+
 # 5) Add the Supabase JS library before the main script -----------------------
 SUPA_CDN = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
 if tpl.count('<script>') != 1: fail(f"expected 1 inline <script>, found {tpl.count('<script>')}")
