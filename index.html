@@ -424,6 +424,12 @@
   .authalt{margin-top:12px; font-size:12.5px; color:var(--muted)}
   .linkbtn{background:none; border:0; color:var(--cyan); font:inherit; font-weight:700; cursor:pointer; padding:0}
   .linkbtn:hover{text-decoration:underline}
+  .reelbtn{margin-top:10px; width:100%; font-family:'Inter',sans-serif; font-weight:800; font-size:13px; color:var(--bg); background:var(--cyan); border:0; border-radius:9px; padding:9px; cursor:pointer}
+  .reelbtn:hover{filter:brightness(1.08)}
+  .reelmodal{position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.86); display:flex; align-items:center; justify-content:center; padding:16px}
+  .reelbox{position:relative; width:min(960px,96vw)}
+  .reelbox video{width:100%; max-height:86vh; border-radius:12px; background:#000; display:block}
+  .reelclose{position:absolute; top:-12px; right:-6px; width:36px; height:36px; border-radius:50%; border:0; background:var(--panel2); color:var(--ink); font-size:22px; line-height:1; cursor:pointer}
 </style>
 </head>
 <body>
@@ -678,7 +684,7 @@ function card(o){
   const detail = hasDetail ? '<details class="more"'+(live?' open':'')+'><summary>Stats &amp; timeline</summary>'+statStrip(o)+timeline(o)+'</details>' : '';
   return '<div class="mcard'+(live?' live':'')+'"><div class="mtop"><span class="stage">'+(o.ko?'Knockout':('Group '+(o.group||'?')))+'</span>'+timeHTML+'</div>'
    +teamRow(o.home,showScore?o.hs:'',hw,aw)+teamRow(o.away,showScore?o.as:'',aw,hw)
-   +(showScore?'':oddsBlock(o))+detail+'</div>';
+   +(showScore?'':oddsBlock(o))+((done&&window.REELS&&window.REELS[o.id])?'<button class="reelbtn" onclick="openReel(\''+window.REELS[o.id]+'\')">▶ View Highlights</button>':'')+detail+'</div>';
 }
 function renderMatches(){
   const items=[...DATA.events].sort((a,b)=>new Date(a.utc)-new Date(b.utc));
@@ -1244,6 +1250,14 @@ function renderPredictList(){
   box.innerHTML=html;
 }
 function renderPredict(){ renderTelegram(); renderPredictBoard(); renderPredictList(); if(typeof renderShell==='function') renderShell(); }
+
+/* ===================== Full-game highlight reels (View Highlights) ===================== */
+window.REELS = {};
+async function loadReels(){ if(!sb) return; try{ const r=await sb.rpc('wc_reels'); const a=(r&&r.data)||[]; const m={}; a.forEach(x=>{ if(x&&x.m&&x.u) m[x.m]=x.u; }); window.REELS=m; if(typeof renderMatches==='function') renderMatches(); }catch(e){ console.warn('loadReels', e); } }
+function reelEsc(e){ if(e.key==='Escape') closeReel(); }
+function closeReel(){ const md=document.getElementById('reelModal'); if(md){ const v=md.querySelector('video'); if(v){ try{ v.pause(); }catch(_){} } md.remove(); } document.removeEventListener('keydown', reelEsc, true); document.body.style.overflow=''; }
+function openReel(url){ if(!url) return; closeReel(); const ov=document.createElement('div'); ov.className='reelmodal'; ov.id='reelModal'; ov.innerHTML='<div class="reelbox"><button class="reelclose" onclick="closeReel()" aria-label="Close">×</button><video src="'+url+'" controls autoplay playsinline></video></div>'; ov.addEventListener('click', function(e){ if(e.target===ov) closeReel(); }); document.body.appendChild(ov); document.addEventListener('keydown', reelEsc, true); document.body.style.overflow='hidden'; }
+loadReels(); setInterval(loadReels, 300000);
 
 paint();
 route();

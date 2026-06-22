@@ -71,6 +71,12 @@ NEW_CSS = r"""
   .authalt{margin-top:12px; font-size:12.5px; color:var(--muted)}
   .linkbtn{background:none; border:0; color:var(--cyan); font:inherit; font-weight:700; cursor:pointer; padding:0}
   .linkbtn:hover{text-decoration:underline}
+  .reelbtn{margin-top:10px; width:100%; font-family:'Inter',sans-serif; font-weight:800; font-size:13px; color:var(--bg); background:var(--cyan); border:0; border-radius:9px; padding:9px; cursor:pointer}
+  .reelbtn:hover{filter:brightness(1.08)}
+  .reelmodal{position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.86); display:flex; align-items:center; justify-content:center; padding:16px}
+  .reelbox{position:relative; width:min(960px,96vw)}
+  .reelbox video{width:100%; max-height:86vh; border-radius:12px; background:#000; display:block}
+  .reelclose{position:absolute; top:-12px; right:-6px; width:36px; height:36px; border-radius:50%; border:0; background:var(--panel2); color:var(--ink); font-size:22px; line-height:1; cursor:pointer}
 """
 CLOSE = '</style>'
 if CLOSE not in tpl: fail("no </style> after font swap")
@@ -286,9 +292,23 @@ function renderPredictList(){
   }
   box.innerHTML=html;
 }
-function renderPredict(){ renderTelegram(); renderPredictBoard(); renderPredictList(); if(typeof renderShell==='function') renderShell(); }"""
+function renderPredict(){ renderTelegram(); renderPredictBoard(); renderPredictList(); if(typeof renderShell==='function') renderShell(); }
+
+/* ===================== Full-game highlight reels (View Highlights) ===================== */
+window.REELS = {};
+async function loadReels(){ if(!sb) return; try{ const r=await sb.rpc('wc_reels'); const a=(r&&r.data)||[]; const m={}; a.forEach(x=>{ if(x&&x.m&&x.u) m[x.m]=x.u; }); window.REELS=m; if(typeof renderMatches==='function') renderMatches(); }catch(e){ console.warn('loadReels', e); } }
+function reelEsc(e){ if(e.key==='Escape') closeReel(); }
+function closeReel(){ const md=document.getElementById('reelModal'); if(md){ const v=md.querySelector('video'); if(v){ try{ v.pause(); }catch(_){} } md.remove(); } document.removeEventListener('keydown', reelEsc, true); document.body.style.overflow=''; }
+function openReel(url){ if(!url) return; closeReel(); const ov=document.createElement('div'); ov.className='reelmodal'; ov.id='reelModal'; ov.innerHTML='<div class="reelbox"><button class="reelclose" onclick="closeReel()" aria-label="Close">×</button><video src="'+url+'" controls autoplay playsinline></video></div>'; ov.addEventListener('click', function(e){ if(e.target===ov) closeReel(); }); document.body.appendChild(ov); document.addEventListener('keydown', reelEsc, true); document.body.style.overflow='hidden'; }
+loadReels(); setInterval(loadReels, 300000);"""
 
 tpl = tpl[:s] + NEW_PRED_JS + tpl[e:]
+
+# 7b) "View Highlights" button on completed match cards (reel modal)
+CARD_OLD = r"""+(showScore?'':oddsBlock(o))+detail+'</div>';"""
+CARD_NEW = r"""+(showScore?'':oddsBlock(o))+((done&&window.REELS&&window.REELS[o.id])?'<button class="reelbtn" onclick="openReel(\''+window.REELS[o.id]+'\')">▶ View Highlights</button>':'')+detail+'</div>';"""
+if CARD_OLD not in tpl: fail("card() oddsBlock/detail anchor not found")
+tpl = tpl.replace(CARD_OLD, CARD_NEW, 1)
 
 # 8) Bootstrap: swap loadPred() for initPredictAuth() -------------------------
 if "\nloadPred();" not in tpl: fail("bootstrap loadPred() not found")
