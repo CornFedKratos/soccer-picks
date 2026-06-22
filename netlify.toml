@@ -1,0 +1,11 @@
+# Static site (index.html at root) + the match-reel background function.
+[build]
+  publish = "."
+  # No build step for the static site; npm install runs automatically to fetch
+  # ffmpeg-static for the function.
+
+[functions]
+  node_bundler = "esbuild"
+  # Ship the ffmpeg binary with the function bundle (esbuild can't bundle a binary).
+  included_files = ["node_modules/ffmpeg-static/ffmpeg"]
+  external_node_modules = ["ffmpeg-static"]

@@ -1,0 +1,8 @@
+{
+  "name": "soccer-picks",
+  "private": true,
+  "description": "World Cup board static site + match-reel background function",
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0"
+  }
+}
