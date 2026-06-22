@@ -223,7 +223,38 @@ swap(
   """+'<div class="round" data-r="F"><div class="round-h">Final</div><div class="ties">'+(R.F.length?bracketTie(R.F[0]):tbdTie())+'</div></div>'+'<div class="round champ-col" data-r="F"><div class="round-h" style="visibility:hidden">Final</div><div class="champ"><img class="trophy" src="assets/wc-trophy.png" alt="Champion" width="90" height="90"><div class="lbl">Champion</div>'+champWho(R.F[0])+'</div></div>';""",
   "renderBracket champ")
 
-# 4d) Standings: 3-way status (In/Out/Alive), per-team LIVE dot, Alive advance hint -----------
+# 4d) Standings: mirror ESPN's official standings feed (rank order + note status) + per-team LIVE dot.
+# Authoritative: ESPN applies FIFA's full tiebreakers; we map note -> IN/ALIVE/OUT.
+swap(
+  """const SB='https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';""",
+  """const SB='https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
+const STAND='https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings';
+let ESPN_STAT={};
+async function fetchStandings(){
+  try{
+    const r=await fetch(STAND); if(!r.ok) return;
+    const d=await r.json(); const map={};
+    (d.children||[]).forEach(function(g){ (((g.standings||{}).entries)||[]).forEach(function(e){
+      const key=norm(((e.team||{}).displayName)||''); if(!key) return;
+      const stx={}; (e.stats||[]).forEach(function(s){ stx[s.name]=s; });
+      const rank=stx.rank?Math.round(stx.rank.value):9;
+      const note=((e.note||{}).description)||'';
+      let st='alive';
+      if(/eliminat/i.test(note)) st='out';
+      else if(/best\\s*8/i.test(note)) st='alive';
+      else if(/advance/i.test(note)) st='in';
+      map[key]={rank:rank, note:note, st:st};
+    }); });
+    if(Object.keys(map).length){ ESPN_STAT=map; if(typeof renderGroups==='function') renderGroups(); }
+  }catch(e){ console.warn('standings', e); }
+}""",
+  "fetchStandings")
+
+swap(
+  """  finally{ fetchLeaders(); clearTimeout(liveTimer); liveTimer=setTimeout(liveTick, liveCount()>0?30000:120000); }""",
+  """  finally{ fetchLeaders(); fetchStandings(); clearTimeout(liveTimer); liveTimer=setTimeout(liveTick, liveCount()>0?30000:120000); }""",
+  "liveTick fetchStandings hook")
+
 swap(
   """function statusBadge(k){
   if(k==='in')  return '<span class="st st-in">IN</span>';
@@ -232,56 +263,13 @@ swap(
   if(k==='out3')return '<span class="st st-out" title="3rd place, outside the best 8 (provisional)">OUT*</span>';
   return '<span class="st st-live">live</span>';
 }""",
-  """function statusBadge(k, hint){
-  if(k==='in')  return '<span class="st st-in">IN</span>';
-  if(k==='out') return '<span class="st st-out">OUT</span>';
-  if(k==='in3') return '<span class="st st-in3" title="Provisionally through via best 3rd place">IN*</span>';
-  if(k==='out3')return '<span class="st st-out" title="3rd place, outside the best 8 (provisional)">OUT*</span>';
-  return '<span class="st st-alive" title="'+String(hint||'Still in contention').replace(/"/g,'&quot;')+'">ALIVE</span>';
-}
-function advanceHint(teams, x){
-  var N=teams.length, me=teams[x].t, idx={}, names={};
-  teams.forEach(function(t,i){idx[t.t]=i; names[t.t]=1;});
-  var rem=DATA.events.filter(function(e){return e.state!=='post'&&!e.ko&&names[e.home]&&names[e.away];}).map(function(e){return [e.home,e.away];});
-  if(!rem.length) return 'Still in contention.';
-  var mine=rem.filter(function(g){return g[0]===me||g[1]===me;});
-  var others=rem.filter(function(g){return !(g[0]===me||g[1]===me);});
-  var base=teams.map(function(t){return t.pts;});
-  function guarantees(code){
-    var ko=Math.pow(3,others.length);
-    for(var sc=0; sc<ko; sc++){
-      var pts=base.slice(), c=sc;
-      mine.forEach(function(g){ var iAmHome=g[0]===me, hi=idx[g[0]], ai=idx[g[1]];
-        if(code==='w'){ if(iAmHome)pts[hi]+=3; else pts[ai]+=3; }
-        else if(code==='d'){ pts[hi]++; pts[ai]++; }
-        else { if(iAmHome)pts[ai]+=3; else pts[hi]+=3; } });
-      others.forEach(function(g){ var o=c%3; c=(c/3)|0; var hi=idx[g[0]], ai=idx[g[1]];
-        if(o===0)pts[hi]+=3; else if(o===1){pts[hi]++;pts[ai]++;} else pts[ai]+=3; });
-      var above=0; for(var y=0;y<N;y++){ if(y!==x && pts[y]>pts[x]) above++; }
-      if(above>1) return false;
-    }
-    return true;
-  }
-  var opp = mine.length===1 ? (mine[0][0]===me?mine[0][1]:mine[0][0]) : null;
-  var vs = opp ? (' vs '+norm(opp)) : '';
-  function reachTop2(){
-    var k=rem.length, total=Math.pow(3,k);
-    for(var sc=0; sc<total; sc++){
-      var P=teams.map(function(t){return t.pts;}), G=teams.map(function(t){return t.gd;}), c=sc;
-      for(var r=0;r<k;r++){ var o=c%3; c=(c/3)|0; var hi=idx[rem[r][0]], ai=idx[rem[r][1]], inv=(rem[r][0]===me||rem[r][1]===me);
-        var oo=inv?(rem[r][0]===me?0:2):o, m=inv?50:1;
-        if(oo===0){P[hi]+=3;G[hi]+=m;G[ai]-=m;} else if(oo===1){P[hi]++;P[ai]++;} else {P[ai]+=3;G[ai]+=m;G[hi]-=m;} }
-      var ord=teams.map(function(t,i){return i;}).sort(function(a,b){return (P[b]-P[a])||(G[b]-G[a]);});
-      if(ord.indexOf(x)<2) return true;
-    }
-    return false;
-  }
-  if(!reachTop2()) return mine.length ? ('Out of the top-2 race — can only sneak in as a best third-place team: win'+vs+' big and hope other results fall right.') : 'Can only advance as one of the 8 best third-place teams.';
-  if(guarantees('d')) return mine.length===1 ? ('Avoid defeat'+vs+' to reach the top 2.') : 'Draw or better in your remaining games to reach the top 2.';
-  if(guarantees('w')) return mine.length===1 ? ('Win'+vs+' to reach the top 2.') : 'Win your remaining games to reach the top 2.';
-  return mine.length===1 ? ('Win'+vs+' and depend on other results.') : 'Win out and depend on other results to advance.';
+  """function statusBadge(k, note){
+  var ttl = note ? (' title="'+String(note).replace(/"/g,'&quot;')+'"') : '';
+  if(k==='out') return '<span class="st st-out"'+ttl+'>OUT</span>';
+  if(k==='alive') return '<span class="st st-alive"'+ttl+'>ALIVE</span>';
+  return '<span class="st st-in"'+ttl+'>IN</span>';
 }""",
-  "statusBadge+advanceHint")
+  "statusBadge")
 
 swap(
   """  document.getElementById('groupsBox').innerHTML=sorted.map(s=>{
@@ -293,20 +281,19 @@ swap(
   """  const liveTeams=new Set(); DATA.events.filter(e=>e.state==='in'&&!e.ko).forEach(e=>{liveTeams.add(e.home); liveTeams.add(e.away);});
   document.getElementById('groupsBox').innerHTML=sorted.map(s=>{
     const sts=statuses(s), teams=s.teams; const games=Math.round(teams.reduce((a,t)=>a+t.p,0)/2);
-    const rows=teams.map((t,i)=>{const qual=i<2, st=sts[i], out=(st==='out'||st==='out3'); const lv=liveTeams.has(t.t)?'<span class="livetag"><i></i>LIVE</span>':''; const hint=(st==='alive')?advanceHint(teams,i):'';
+    const rows=teams.map((t,i)=>{const qual=i<2, st=sts[i], out=(st==='out'); const lv=liveTeams.has(t.t)?'<span class="livetag"><i></i>LIVE</span>':''; const note=(ESPN_STAT[t.t]||{}).note||'';
       return '<tr class="'+(qual?'qual':'')+(out?' elim':'')+'"><td class="team"><span class="pos">'+(i+1)+'</span><span class="flag">'+flag(t.t)+'</span><span class="nm">'+t.t+'</span>'+lv+'</td>'
        +'<td>'+t.p+'</td><td>'+(t.gd>0?'+':'')+t.gd+'</td><td class="pts">'+t.pts+'</td>'
-       +'<td class="stcell">'+statusBadge(st,hint)+'</td></tr>';}).join('');""",
-  "groups row live+hint")
+       +'<td class="stcell">'+statusBadge(st,note)+'</td></tr>';}).join('');""",
+  "groups row live+status")
 
-# define current 3rd-place line per group so statuses() can judge the best-third (Alive) cutoff
+# order each group by ESPN's official rank (full tiebreakers), falling back to pts/gd/wins pre-feed
 swap(
-  """  const top8=new Set(thirds.slice(0,8).map(x=>x.g));""",
-  """  const top8=new Set(thirds.slice(0,8).map(x=>x.g));
-  const THIRD_LINES=new Map(sorted.map(ss=>[ss.g,{pts:((ss.teams[2]||{}).pts)||0, gd:((ss.teams[2]||{}).gd)||0}]));""",
-  "THIRD_LINES")
+  """  const sorted=GROUPS.map(g=>({g:g.g, teams:[...g.teams].sort((a,b)=> b.pts-a.pts || b.gd-a.gd || b.w-a.w)}));""",
+  """  const sorted=GROUPS.map(g=>({g:g.g, teams:[...g.teams].sort((a,b)=>{ var ra=(ESPN_STAT[a.t]||{}).rank||9, rb=(ESPN_STAT[b.t]||{}).rank||9; return ra-rb || (b.pts-a.pts) || (b.gd-a.gd) || (b.w-a.w); })}));""",
+  "sorted by ESPN rank")
 
-# GD-aware, realistic 3-state contention: IN (clinched top-2) / OUT (can't realistically advance) / alive
+# statuses() now just reads ESPN's note-derived status (IN / ALIVE / OUT)
 swap(
   """  function statuses(s){
     const teams=s.teams, N=teams.length;
@@ -325,42 +312,15 @@ swap(
     return teams.map((t,x)=> clinch[x]?'in':(!third[x]?'out':'alive'));
   }""",
   """  function statuses(s){
-    const teams=s.teams, N=teams.length;
-    const names=new Set(teams.map(t=>t.t)); const rem=remOf(names);
-    const idx={}; teams.forEach((t,i)=>idx[t.t]=i);
-    const k=rem.length, total=Math.pow(3,k), BIG=50;
-    function ranksOf(f, mode){
-      const out=[];
-      for(let scn=0; scn<total; scn++){
-        const P=teams.map(t=>t.pts), G=teams.map(t=>t.gd); let c=scn;
-        for(let r=0;r<k;r++){ const o=c%3; c=(c/3)|0; const hi=idx[rem[r][0]], ai=idx[rem[r][1]], inv=(hi===f||ai===f);
-          let oo=o; if(inv){ const fHome=(hi===f); oo = mode==='best' ? (fHome?0:2) : (fHome?2:0); }
-          const m = inv?BIG:1;
-          if(oo===0){P[hi]+=3; G[hi]+=m; G[ai]-=m;} else if(oo===1){P[hi]++; P[ai]++;} else {P[ai]+=3; G[ai]+=m; G[hi]-=m;}
-        }
-        const ord=teams.map((t,i)=>i).sort((a,b)=>(P[b]-P[a])||(G[b]-G[a]));
-        out.push(ord.indexOf(f)+1);
-      }
-      return out;
-    }
-    return teams.map((t,x)=>{
-      const br=Math.min.apply(null, ranksOf(x,'best')), wr=Math.max.apply(null, ranksOf(x,'worst'));
-      if(wr<=2) return 'in';
-      if(br<=2) return 'alive';
-      if(br>=4) return 'out';
-      const own=rem.filter(g=>g[0]===t.t||g[1]===t.t).length;
-      const myPts=t.pts+3*own, myGd=t.gd+2*own;
-      let behind=0; THIRD_LINES.forEach((ln,g)=>{ if(g!==s.g && (ln.pts>myPts || (ln.pts===myPts && ln.gd>myGd))) behind++; });
-      return behind>=8 ? 'out' : 'alive';
-    });
+    return s.teams.map(function(t){ var e=ESPN_STAT[t.t]; return (e&&e.st)||'alive'; });
   }""",
-  "statuses GD-aware")
+  "statuses from ESPN")
 
-# legend: 3-state wording
+# legend wording
 swap(
   """      <div class="sub">Top 2 of each group advance, plus the 8 best third-place teams · <b style="color:var(--win)">IN</b> clinched · <b style="color:var(--loss)">OUT</b> eliminated · <span style="color:var(--faint)">* = provisional via 3rd</span></div>""",
-  """      <div class="sub">Top 2 of each group advance, plus the 8 best third-place teams · <b style="color:var(--win)">IN</b> clinched · <b style="color:var(--loss)">OUT</b> can't realistically advance · <b style="color:var(--gold)">ALIVE</b> still in contention</div>""",
-  "legend 3-state")
+  """      <div class="sub">Top 2 of each group advance, plus the 8 best third-place teams · <b style="color:var(--win)">IN</b> advancing · <b style="color:var(--gold)">ALIVE</b> in the hunt · <b style="color:var(--loss)">OUT</b> eliminated · <span style="color:var(--faint)">status per official standings</span></div>""",
+  "legend")
 
 # 5) Add the Supabase JS library before the main script -----------------------
 SUPA_CDN = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
