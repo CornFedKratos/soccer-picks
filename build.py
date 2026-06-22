@@ -128,7 +128,6 @@ NEW_PRED_JS = r"""/* ===================== PREDICT (Supabase magic-link sign-up)
 const SB_URL='https://ckldrmyzmwnujzpxxjpt.supabase.co';
 const SB_KEY='sb_publishable_bsmzithS3xRk2_VLdBKFKg_97YqazB6';
 const TG_BOT='SCHM1NK_SoccerPicks_Bot';
-const PICK_GRACE_DAY='2026-06-21'; // Central calendar day (YYYY-MM-DD) whose matches stay pickable even after kickoff; matches on later days lock at their own kickoff
 let sb=null;
 try{ sb = window.supabase.createClient(SB_URL, SB_KEY, { db:{schema:'worldcup'}, auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } }); }catch(e){ console.warn('supabase init failed', e); }
 let ME=null, MYNAME='', CODE='', MYID='', MYPICKS={}, PLAYERS={}, PICKLIST=[], MYSUB=false, predRefreshTimer=null, TG_DISMISSED=false, PICK_FLASH={};
@@ -136,7 +135,7 @@ try{ TG_DISMISSED = localStorage.getItem('wc_tg_dismissed')==='1'; }catch(e){}
 
 const outcomeOf=e=> e.hs>e.as?'h':(e.as>e.hs?'a':'d');
 function pickable(e){ return KNOWN.has(e.home)&&KNOWN.has(e.away); }
-function pickOpen(e){ return e.state==='pre' || dayNum(new Date(e.utc))===PICK_GRACE_DAY; }
+function pickOpen(e){ return new Date(e.utc).getTime() > Date.now(); } // locked at kickoff, no exceptions
 function scorePicksMap(map){ let pts=0,correct=0,total=0; map=map||{};
   DATA.events.forEach(e=>{ if(e.state!=='post'||!pickable(e)) return; const p=map[e.id]; if(!p) return;
     const o=outcomeOf(e); if(e.ko&&o==='d') return; total++; if(p===o){correct++; pts+=3;} });
