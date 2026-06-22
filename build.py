@@ -78,6 +78,11 @@ NEW_CSS = r"""
   .reelbox video{width:100%; max-height:86vh; border-radius:12px; background:#000; display:block}
   .reelbox iframe{width:100%; aspect-ratio:16/9; max-height:86vh; border-radius:12px; background:#000; display:block; border:0}
   .reelclose{position:absolute; top:-12px; right:-6px; width:36px; height:36px; border-radius:50%; border:0; background:var(--panel2); color:var(--ink); font-size:22px; line-height:1; cursor:pointer}
+  /* ---- Standings: Alive contention status + per-team LIVE indicator ---- */
+  .st-alive{background:rgba(244,194,75,.12); color:var(--gold); border:1px solid rgba(244,194,75,.34); font-weight:800}
+  .livetag{display:inline-flex; align-items:center; gap:4px; margin-left:7px; font-size:9px; font-weight:800; letter-spacing:.5px; color:var(--live); vertical-align:middle}
+  .livetag i{width:6px; height:6px; border-radius:50%; background:var(--live); box-shadow:0 0 0 0 rgba(255,59,87,.5); animation:pulse2 1.2s infinite; flex:0 0 auto}
+  @media(prefers-reduced-motion:reduce){ .livetag i{animation:none} }
 """
 CLOSE = '</style>'
 if CLOSE not in tpl: fail("no </style> after font swap")
@@ -217,6 +222,69 @@ swap(
   """+'<div class="round" data-r="F"><div class="round-h">Final</div>'+(R.F.length?bracketTie(R.F[0]):tbdTie())+'<div class="champ"><div class="trophy">\\uD83C\\uDFC6</div><div class="lbl">Champion</div></div></div>';""",
   """+'<div class="round" data-r="F"><div class="round-h">Final</div><div class="ties">'+(R.F.length?bracketTie(R.F[0]):tbdTie())+'</div></div>'+'<div class="round champ-col" data-r="F"><div class="round-h" style="visibility:hidden">Final</div><div class="champ"><img class="trophy" src="assets/wc-trophy.png" alt="Champion" width="90" height="90"><div class="lbl">Champion</div>'+champWho(R.F[0])+'</div></div>';""",
   "renderBracket champ")
+
+# 4d) Standings: 3-way status (In/Out/Alive), per-team LIVE dot, Alive advance hint -----------
+swap(
+  """function statusBadge(k){
+  if(k==='in')  return '<span class="st st-in">IN</span>';
+  if(k==='out') return '<span class="st st-out">OUT</span>';
+  if(k==='in3') return '<span class="st st-in3" title="Provisionally through via best 3rd place">IN*</span>';
+  if(k==='out3')return '<span class="st st-out" title="3rd place, outside the best 8 (provisional)">OUT*</span>';
+  return '<span class="st st-live">live</span>';
+}""",
+  """function statusBadge(k, hint){
+  if(k==='in')  return '<span class="st st-in">IN</span>';
+  if(k==='out') return '<span class="st st-out">OUT</span>';
+  if(k==='in3') return '<span class="st st-in3" title="Provisionally through via best 3rd place">IN*</span>';
+  if(k==='out3')return '<span class="st st-out" title="3rd place, outside the best 8 (provisional)">OUT*</span>';
+  return '<span class="st st-alive" title="'+String(hint||'Still in contention').replace(/"/g,'&quot;')+'">ALIVE</span>';
+}
+function advanceHint(teams, x){
+  var N=teams.length, me=teams[x].t, idx={}, names={};
+  teams.forEach(function(t,i){idx[t.t]=i; names[t.t]=1;});
+  var rem=DATA.events.filter(function(e){return e.state!=='post'&&!e.ko&&names[e.home]&&names[e.away];}).map(function(e){return [e.home,e.away];});
+  if(!rem.length) return 'Still in contention.';
+  var mine=rem.filter(function(g){return g[0]===me||g[1]===me;});
+  var others=rem.filter(function(g){return !(g[0]===me||g[1]===me);});
+  var base=teams.map(function(t){return t.pts;});
+  function guarantees(code){
+    var ko=Math.pow(3,others.length);
+    for(var sc=0; sc<ko; sc++){
+      var pts=base.slice(), c=sc;
+      mine.forEach(function(g){ var iAmHome=g[0]===me, hi=idx[g[0]], ai=idx[g[1]];
+        if(code==='w'){ if(iAmHome)pts[hi]+=3; else pts[ai]+=3; }
+        else if(code==='d'){ pts[hi]++; pts[ai]++; }
+        else { if(iAmHome)pts[ai]+=3; else pts[hi]+=3; } });
+      others.forEach(function(g){ var o=c%3; c=(c/3)|0; var hi=idx[g[0]], ai=idx[g[1]];
+        if(o===0)pts[hi]+=3; else if(o===1){pts[hi]++;pts[ai]++;} else pts[ai]+=3; });
+      var above=0; for(var y=0;y<N;y++){ if(y!==x && pts[y]>pts[x]) above++; }
+      if(above>1) return false;
+    }
+    return true;
+  }
+  var opp = mine.length===1 ? (mine[0][0]===me?mine[0][1]:mine[0][0]) : null;
+  var vs = opp ? (' vs '+norm(opp)) : '';
+  if(guarantees('d')) return mine.length===1 ? ('Avoid defeat'+vs+' to reach the top 2.') : 'Draw or better in your remaining games to reach the top 2.';
+  if(guarantees('w')) return mine.length===1 ? ('Win'+vs+' to reach the top 2.') : 'Win your remaining games to reach the top 2.';
+  return mine.length===1 ? ('Win'+vs+' and depend on other results.') : 'Win out and depend on other results to advance.';
+}""",
+  "statusBadge+advanceHint")
+
+swap(
+  """  document.getElementById('groupsBox').innerHTML=sorted.map(s=>{
+    const sts=statuses(s), teams=s.teams; const games=Math.round(teams.reduce((a,t)=>a+t.p,0)/2);
+    const rows=teams.map((t,i)=>{const qual=i<2, st=sts[i], out=(st==='out'||st==='out3');
+      return '<tr class="'+(qual?'qual':'')+(out?' elim':'')+'"><td class="team"><span class="pos">'+(i+1)+'</span><span class="flag">'+flag(t.t)+'</span><span class="nm">'+t.t+'</span></td>'
+       +'<td>'+t.p+'</td><td>'+(t.gd>0?'+':'')+t.gd+'</td><td class="pts">'+t.pts+'</td>'
+       +'<td class="stcell">'+statusBadge(st)+'</td></tr>';}).join('');""",
+  """  const liveTeams=new Set(); DATA.events.filter(e=>e.state==='in'&&!e.ko).forEach(e=>{liveTeams.add(e.home); liveTeams.add(e.away);});
+  document.getElementById('groupsBox').innerHTML=sorted.map(s=>{
+    const sts=statuses(s), teams=s.teams; const games=Math.round(teams.reduce((a,t)=>a+t.p,0)/2);
+    const rows=teams.map((t,i)=>{const qual=i<2, st=sts[i], out=(st==='out'||st==='out3'); const lv=liveTeams.has(t.t)?'<span class="livetag"><i></i>LIVE</span>':''; const hint=(st==='alive')?advanceHint(teams,i):'';
+      return '<tr class="'+(qual?'qual':'')+(out?' elim':'')+'"><td class="team"><span class="pos">'+(i+1)+'</span><span class="flag">'+flag(t.t)+'</span><span class="nm">'+t.t+'</span>'+lv+'</td>'
+       +'<td>'+t.p+'</td><td>'+(t.gd>0?'+':'')+t.gd+'</td><td class="pts">'+t.pts+'</td>'
+       +'<td class="stcell">'+statusBadge(st,hint)+'</td></tr>';}).join('');""",
+  "groups row live+hint")
 
 # 5) Add the Supabase JS library before the main script -----------------------
 SUPA_CDN = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
