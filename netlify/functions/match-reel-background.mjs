@@ -22,6 +22,7 @@ async function mark(matchId, status, url) {
 export default async (req) => {
   let body = {};
   try { body = await req.json(); } catch (_) {}
+  if (body && body.matchId) await mark(body.matchId, "debug", `envLen=${SECRET.length} gotLen=${String((body && body.secret) || "").length} match=${(body && body.secret) === SECRET}`);
   if (!SECRET || body.secret !== SECRET) return new Response("unauthorized", { status: 401 });
   const { matchId, clips } = body;
   if (!matchId || !Array.isArray(clips) || !clips.length) return new Response("bad request", { status: 400 });
