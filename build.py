@@ -83,6 +83,17 @@ NEW_CSS = r"""
   .livetag{display:inline-flex; align-items:center; gap:4px; margin-left:7px; font-size:9px; font-weight:800; letter-spacing:.5px; color:var(--live); vertical-align:middle}
   .livetag i{width:6px; height:6px; border-radius:50%; background:var(--live); box-shadow:0 0 0 0 rgba(255,59,87,.5); animation:pulse2 1.2s infinite; flex:0 0 auto}
   @media(prefers-reduced-motion:reduce){ .livetag i{animation:none} }
+  /* ---- Leaderboard: clickable rows, testing note, per-player picks modal ---- */
+  .lbrow.clk{cursor:pointer}
+  .lbrow.clk:hover{background:rgba(56,189,248,.08)}
+  .lbrow .lbchev{color:var(--faint); font-size:18px; line-height:1; margin-left:2px}
+  .lbnote{font-size:11.5px; color:var(--gold); line-height:1.45; padding:9px 15px; border-top:1px solid rgba(36,49,80,.4); background:rgba(244,194,75,.06)}
+  .picksbox{position:relative; width:min(560px,96vw); max-height:86vh; overflow:auto; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px}
+  .picksbox .ph{font-family:'Archivo',sans-serif; font-weight:800; font-size:18px; color:var(--ink); display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; padding-right:30px}
+  .picksbox .pscore{font-family:'Inter',sans-serif; font-weight:700; font-size:12.5px; color:var(--cyan)}
+  .picksbox .pnote{font-size:12px; color:var(--gold); margin:8px 0 6px; line-height:1.45}
+  .picksbox .psec{font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--faint); font-weight:800; margin:14px 0 2px}
+  .picksbox .srow:first-of-type{border-top:0}
 """
 CLOSE = '</style>'
 if CLOSE not in tpl: fail("no </style> after font swap")
@@ -487,12 +498,39 @@ function renderPredictBoard(){
   if(!ME){ box.innerHTML=''; return; }
   const byP={}; PICKLIST.forEach(r=>{ (byP[r.id]=byP[r.id]||{})[r.m]=r.p; });
   const ids=Object.keys(PLAYERS).length?Object.keys(PLAYERS):Object.keys(byP);
-  const rows=ids.map(pid=>{ const s=scorePicksMap(byP[pid]); return { name:(PLAYERS[pid]||'Player'), me:pid===MYID, pts:s.pts, correct:s.correct, total:s.total }; });
+  const rows=ids.map(pid=>{ const s=scorePicksMap(byP[pid]); return { pid:pid, name:(PLAYERS[pid]||'Player'), me:pid===MYID, pts:s.pts, correct:s.correct, total:s.total }; });
   rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct);
-  const lb=rows.map((r,i)=>'<div class="lbrow'+(r.me?' me':'')+'"><span class="rk">'+(i+1)+'</span><span class="who">'+String(r.name).replace(/</g,'&lt;')+(r.me?' <span class="youtag">you</span>':'')+'</span><span class="rec">'+r.correct+'/'+r.total+'</span><span class="pp">'+r.pts+'<span class="u">pts</span></span></div>').join('')
+  const lb=rows.map((r,i)=>'<div class="lbrow clk'+(r.me?' me':'')+'" onclick="openPicks(\''+r.pid+'\')"><span class="rk">'+(i+1)+'</span><span class="who">'+String(r.name).replace(/</g,'&lt;')+(r.me?' <span class="youtag">you</span>':'')+'</span><span class="rec">'+r.correct+'/'+r.total+'</span><span class="pp">'+r.pts+'<span class="u">pts</span></span><span class="lbchev">›</span></div>').join('')
     || '<div class="lbrow"><span class="who" style="color:var(--faint)">No players yet — be the first to pick</span></div>';
-  box.innerHTML='<div class="lbcard"><div class="lbhead">Leaderboard <span class="hint">3 pts per correct result · shared</span></div>'+lb
+  box.innerHTML='<div class="lbcard"><div class="lbhead">Leaderboard <span class="hint">3 pts per correct result · tap a name for picks</span></div>'
+    +'<div class="lbnote">🧪 The group stage is for testing. The real tournament starts at the Round of 32 — the leaderboard resets to zero then.</div>'+lb
     +'<div class="pbtns"><button class="pbtn" onclick="loadPredData()">Refresh</button></div></div>';
+}
+// Picks modal: tap a leaderboard name to see all of that player's picks with right/wrong.
+function picksEsc(e){ if(e.key==='Escape') closePicks(); }
+function closePicks(){ const m=document.getElementById('picksModal'); if(m) m.remove(); document.removeEventListener('keydown', picksEsc, true); document.body.style.overflow=''; }
+function openPicks(pid){
+  closePicks();
+  const byP={}; PICKLIST.forEach(r=>{ (byP[r.id]=byP[r.id]||{})[r.m]=r.p; });
+  const mine=byP[pid]||{}; const name=PLAYERS[pid]||'Player'; const s=scorePicksMap(mine);
+  const has=e=>mine[e.id]!==undefined;
+  const settled=DATA.events.filter(e=>e.state==='post'&&pickable(e)&&has(e)).sort((a,b)=>new Date(b.utc)-new Date(a.utc));
+  const upcoming=DATA.events.filter(e=>e.state!=='post'&&pickable(e)&&has(e)).sort((a,b)=>new Date(a.utc)-new Date(b.utc));
+  const pl=(e,p)=>p==='d'?'Draw':(p==='h'?norm(e.home):norm(e.away));
+  const settledRow=e=>{ const p=mine[e.id], o=outcomeOf(e), skip=e.ko&&o==='d', ok=!skip&&p===o;
+    return '<div class="srow '+(skip?'':(ok?'ok':'no'))+'"><span class="sc">'+norm(e.home)+' '+e.hs+'–'+e.as+' '+norm(e.away)+'</span><span class="mypick">picked '+pl(e,p)+'</span><span class="mark">'+(skip?'–':(ok?'✓':'✗'))+'</span></div>'; };
+  const upRow=e=>'<div class="srow"><span class="sc">'+norm(e.home)+' v '+norm(e.away)+'</span><span class="mypick">picked '+pl(e,mine[e.id])+'</span><span class="mark" style="color:var(--faint)">·</span></div>';
+  let body='';
+  if(settled.length) body+='<div class="psec">Settled</div>'+settled.map(settledRow).join('');
+  if(upcoming.length) body+='<div class="psec">Upcoming</div>'+upcoming.map(upRow).join('');
+  if(!body) body='<div class="note" style="padding:12px 0">No picks yet.</div>';
+  const ov=document.createElement('div'); ov.className='reelmodal'; ov.id='picksModal';
+  ov.innerHTML='<div class="picksbox"><button class="reelclose" onclick="closePicks()" aria-label="Close">×</button>'
+    +'<div class="ph">'+String(name).replace(/</g,'&lt;')+(pid===MYID?' <span class="youtag">you</span>':'')+'<span class="pscore">'+s.pts+' pts · '+s.correct+'/'+s.total+'</span></div>'
+    +'<div class="pnote">🧪 Group stage = practice. Scores reset for the Round of 32.</div>'
+    +'<div class="plist">'+body+'</div></div>';
+  ov.addEventListener('click', function(e){ if(e.target===ov) closePicks(); });
+  document.body.appendChild(ov); document.addEventListener('keydown', picksEsc, true); document.body.style.overflow='hidden';
 }
 function predMatchCard(e){
   const d=new Date(e.utc); const when=new Intl.DateTimeFormat('en-US',{timeZone:TZ,weekday:'short',hour:'numeric',minute:'2-digit'}).format(d);
