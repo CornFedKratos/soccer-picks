@@ -76,6 +76,7 @@ NEW_CSS = r"""
   .reelmodal{position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.86); display:flex; align-items:center; justify-content:center; padding:16px}
   .reelbox{position:relative; width:min(960px,96vw)}
   .reelbox video{width:100%; max-height:86vh; border-radius:12px; background:#000; display:block}
+  .reelbox iframe{width:100%; aspect-ratio:16/9; max-height:86vh; border-radius:12px; background:#000; display:block; border:0}
   .reelclose{position:absolute; top:-12px; right:-6px; width:36px; height:36px; border-radius:50%; border:0; background:var(--panel2); color:var(--ink); font-size:22px; line-height:1; cursor:pointer}
 """
 CLOSE = '</style>'
@@ -298,7 +299,8 @@ window.REELS = {};
 async function loadReels(){ if(!sb) return; try{ const r=await sb.rpc('wc_reels'); const a=(r&&r.data)||[]; const m={}; a.forEach(x=>{ if(x&&x.m&&x.u) m[x.m]=x.u; }); window.REELS=m; if(typeof renderMatches==='function') renderMatches(); }catch(e){ console.warn('loadReels', e); } }
 function reelEsc(e){ if(e.key==='Escape') closeReel(); }
 function closeReel(){ const md=document.getElementById('reelModal'); if(md){ const v=md.querySelector('video'); if(v){ try{ v.pause(); }catch(_){} } md.remove(); } document.removeEventListener('keydown', reelEsc, true); document.body.style.overflow=''; }
-function openReel(url){ if(!url) return; closeReel(); const ov=document.createElement('div'); ov.className='reelmodal'; ov.id='reelModal'; ov.innerHTML='<div class="reelbox"><button class="reelclose" onclick="closeReel()" aria-label="Close">×</button><video src="'+url+'" controls autoplay playsinline></video></div>'; ov.addEventListener('click', function(e){ if(e.target===ov) closeReel(); }); document.body.appendChild(ov); document.addEventListener('keydown', reelEsc, true); document.body.style.overflow='hidden'; }
+function ytId(u){ var m=String(u||'').match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/); return m?m[1]:null; }
+function openReel(url){ if(!url) return; closeReel(); var yt=ytId(url); var media = yt ? '<iframe src="https://www.youtube.com/embed/'+yt+'?autoplay=1&rel=0&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>' : '<video src="'+url+'" controls autoplay playsinline></video>'; const ov=document.createElement('div'); ov.className='reelmodal'; ov.id='reelModal'; ov.innerHTML='<div class="reelbox"><button class="reelclose" onclick="closeReel()" aria-label="Close">×</button>'+media+'</div>'; ov.addEventListener('click', function(e){ if(e.target===ov) closeReel(); }); document.body.appendChild(ov); document.addEventListener('keydown', reelEsc, true); document.body.style.overflow='hidden'; }
 loadReels(); setInterval(loadReels, 300000);"""
 
 tpl = tpl[:s] + NEW_PRED_JS + tpl[e:]
