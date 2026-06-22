@@ -133,12 +133,14 @@ swap(
   .champ .trophy{font-size:34px; text-align:center}
   .champ .lbl{font-family:'Archivo Expanded'; font-weight:800; font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--gold); text-align:center; margin-top:4px}""",
   """  .bracket-scroll{overflow-x:auto; padding-bottom:18px}
-  .bracket{display:flex; gap:34px; min-width:1010px; padding:8px 4px}
-  .round{display:flex; flex-direction:column; justify-content:space-around; gap:12px; min-width:188px}
-  .round-h{font-family:'Archivo',sans-serif; font-weight:800; font-size:10.5px; letter-spacing:1.3px; text-transform:uppercase; color:var(--gold); text-align:center; margin-bottom:8px; padding-bottom:7px; border-bottom:1px solid rgba(244,194,75,.22)}
-  .tie{position:relative; background:linear-gradient(158deg,#16213c,#0d1322); border:1px solid var(--line); border-radius:12px; padding:8px 12px 8px 14px; font-size:12px; box-shadow:0 3px 10px rgba(0,0,0,.30)}
-  .tie::before{content:''; position:absolute; left:0; top:9px; bottom:9px; width:3px; border-radius:0 3px 3px 0; background:linear-gradient(var(--cyan),var(--gold)); opacity:.55}
-  .tie.done::before{background:var(--gold); opacity:.9}
+  .bracket{display:flex; gap:22px; min-width:1160px; padding:8px 2px; align-items:stretch}
+  .round{display:flex; flex-direction:column; min-width:182px}
+  .round-h{font-family:'Archivo',sans-serif; font-weight:800; font-size:10.5px; letter-spacing:1.3px; text-transform:uppercase; color:var(--gold); text-align:center; margin-bottom:10px; padding-bottom:7px; border-bottom:1px solid rgba(244,194,75,.22)}
+  .ties{display:flex; flex-direction:column; flex:1 1 auto}
+  .tie{flex:1 1 0; display:flex; align-items:center; position:relative; min-height:60px}
+  .mcard{position:relative; width:100%; background:linear-gradient(158deg,#16213c,#0d1322); border:1px solid var(--line); border-radius:12px; padding:8px 12px 8px 14px; font-size:12px; box-shadow:0 3px 10px rgba(0,0,0,.30)}
+  .mcard::before{content:''; position:absolute; left:0; top:9px; bottom:9px; width:3px; border-radius:0 3px 3px 0; background:linear-gradient(var(--cyan),var(--gold)); opacity:.55}
+  .mcard.done::before{background:var(--gold); opacity:.9}
   .tie .slot{display:flex; align-items:center; gap:8px; padding:4px 0}
   .tie .slot .flag{font-size:15px; width:20px; text-align:center}
   .tie .slot .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600}
@@ -150,11 +152,13 @@ swap(
   .tie .vs{height:1px; background:linear-gradient(90deg,transparent,var(--line) 25%,var(--line) 75%,transparent); margin:3px 0}
   .tie .mid{font-size:9.5px; color:var(--faint); text-align:center; letter-spacing:.3px; margin-top:3px}
   @media(min-width:821px){
-    .round:not(:last-child) .tie::after{content:''; position:absolute; right:-34px; top:50%; width:34px; height:1px; background:var(--line); opacity:.5}
+    .round:nth-last-child(n+3) .tie::after{content:''; position:absolute; left:100%; top:50%; width:23px; height:2px; background:#46577d}
+    .round:nth-last-child(n+3) .ties .tie:nth-child(odd)::before{content:''; position:absolute; left:calc(100% + 22px); top:50%; width:2px; height:100%; background:#46577d}
   }
-  .champ{align-self:center; margin:auto 0; text-align:center; position:relative; padding:6px 4px}
-  .champ::before{content:''; position:absolute; left:50%; top:30px; width:130px; height:130px; transform:translateX(-50%); background:radial-gradient(circle,rgba(244,194,75,.28),transparent 68%); pointer-events:none}
-  .champ .trophy{position:relative; width:78px; height:auto; display:block; margin:0 auto; filter:drop-shadow(0 6px 16px rgba(244,194,75,.45))}
+  .champ-col{min-width:150px}
+  .champ{margin:auto 0; text-align:center; position:relative; padding:6px 4px}
+  .champ::before{content:''; position:absolute; left:50%; top:50%; width:150px; height:150px; transform:translate(-50%,-50%); background:radial-gradient(circle,rgba(244,194,75,.26),transparent 68%); pointer-events:none}
+  .champ .trophy{position:relative; width:90px; height:auto; display:block; margin:0 auto; filter:drop-shadow(0 6px 16px rgba(244,194,75,.45))}
   .champ .lbl{position:relative; font-family:'Archivo Expanded'; font-weight:800; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--gold); text-align:center; margin-top:10px}
   .champ .who{position:relative; font-size:12.5px; font-weight:700; color:#fff; margin-top:3px}""",
   "desktop bracket css")
@@ -168,14 +172,17 @@ swap(
     .champ{margin:18px 0 4px}
     .champ .trophy{font-size:40px}
   }""",
-  """    .tie{font-size:14.5px; padding:12px 14px 12px 16px; border-radius:13px}
+  """    .ties{display:block}
+    .tie{display:block; flex:none; min-height:0; margin-bottom:11px}
+    .mcard{padding:12px 14px 12px 16px; border-radius:13px; font-size:14.5px}
     .tie .slot{padding:7px 0}
     .tie .slot .flag{font-size:18px; width:24px}
     .tie .slot.tbd .nm{font-size:13px}
     .tie .vs{margin:5px 0}
+    .champ-col{min-width:0}
     .champ{margin:20px 0 6px}
-    .champ .trophy{width:96px}
-    .champ::before{top:6px; width:170px; height:170px}
+    .champ .trophy{width:104px}
+    .champ::before{width:180px; height:180px}
   }""",
   "mobile bracket css")
 
@@ -191,14 +198,24 @@ swap(
   "bslot")
 
 swap(
+  """function tbdTie(){return '<div class="tie"><div class="slot tbd"><span class="flag">\\u00B7</span><span class="nm">TBD</span></div><div class="vs"></div><div class="slot tbd"><span class="flag">\\u00B7</span><span class="nm">TBD</span></div></div>';}""",
+  """function tbdTie(){return '<div class="tie"><div class="mcard"><div class="slot tbd"><span class="flag">·</span><span class="nm">TBD</span></div><div class="vs"></div><div class="slot tbd"><span class="flag">·</span><span class="nm">TBD</span></div></div></div>';}""",
+  "tbdTie")
+
+swap(
+  """const col=(label,arr,want,key)=>{ let t=arr.map(bracketTie).join(''); if(arr.length<want) t+=Array.from({length:want-arr.length}).map(tbdTie).join(''); return '<div class="round" data-r="'+key+'"><div class="round-h">'+label+'</div>'+t+'</div>'; };""",
+  """const col=(label,arr,want,key)=>{ let t=arr.map(bracketTie).join(''); if(arr.length<want) t+=Array.from({length:want-arr.length}).map(tbdTie).join(''); return '<div class="round" data-r="'+key+'"><div class="round-h">'+label+'</div><div class="ties">'+t+'</div></div>'; };""",
+  "col")
+
+swap(
   """function bracketTie(e){ return '<div class="tie">'+bslot(e.home)+'<div class="vs"></div>'+bslot(e.away)+'</div>'; }""",
-  """function bracketTie(e){ var done=e.state==='post'; var hw=done&&e.hs>e.as, aw=done&&e.as>e.hs; return '<div class="tie'+(done?' done':'')+'">'+bslot(e.home,hw)+'<div class="vs"></div>'+bslot(e.away,aw)+'</div>'; }
+  """function bracketTie(e){ var done=e.state==='post'; var hw=done&&e.hs>e.as, aw=done&&e.as>e.hs; return '<div class="tie"><div class="mcard'+(done?' done':'')+'">'+bslot(e.home,hw)+'<div class="vs"></div>'+bslot(e.away,aw)+'</div></div>'; }
 function champWho(f){ if(!f||f.state!=='post') return ''; var w=f.hs>f.as?f.home:(f.as>f.hs?f.away:''); return (w&&KNOWN.has(norm(w)))?'<div class="who">'+norm(w)+'</div>':''; }""",
   "bracketTie")
 
 swap(
   """+'<div class="round" data-r="F"><div class="round-h">Final</div>'+(R.F.length?bracketTie(R.F[0]):tbdTie())+'<div class="champ"><div class="trophy">\\uD83C\\uDFC6</div><div class="lbl">Champion</div></div></div>';""",
-  """+'<div class="round" data-r="F"><div class="round-h">Final</div>'+(R.F.length?bracketTie(R.F[0]):tbdTie())+'<div class="champ"><img class="trophy" src="assets/wc-trophy.png" alt="Champion" width="78" height="78"><div class="lbl">Champion</div>'+champWho(R.F[0])+'</div></div>';""",
+  """+'<div class="round" data-r="F"><div class="round-h">Final</div><div class="ties">'+(R.F.length?bracketTie(R.F[0]):tbdTie())+'</div></div>'+'<div class="round champ-col" data-r="F"><div class="round-h" style="visibility:hidden">Final</div><div class="champ"><img class="trophy" src="assets/wc-trophy.png" alt="Champion" width="90" height="90"><div class="lbl">Champion</div>'+champWho(R.F[0])+'</div></div>';""",
   "renderBracket champ")
 
 # 5) Add the Supabase JS library before the main script -----------------------
