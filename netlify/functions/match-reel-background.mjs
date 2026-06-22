@@ -28,16 +28,18 @@ export default async (req) => {
   let body = {};
   try { body = await req.json(); } catch (_) {}
   if (!SECRET || body.secret !== SECRET) return new Response("unauthorized", { status: 401 });
-  const { matchId, goalId, clips, uploadToken } = body;
-  const isClip = !!goalId;
+  const { matchId, goalId, clipId, clips, uploadToken } = body;
+  const single = !!(goalId || clipId);
   const outName = body.outName || `${matchId}.mp4`;
-  if (!uploadToken || !Array.isArray(clips) || !clips.length || (!matchId && !goalId)) return new Response("bad request", { status: 400 });
+  if (!uploadToken || !Array.isArray(clips) || !clips.length || (!matchId && !goalId && !clipId)) return new Response("bad request", { status: 400 });
 
-  // success/failure marking routes to the right RPC; clip failures leave the row null so the worker retries.
-  const finish = (url) => isClip
+  // success/failure marking routes to the right RPC; single-clip failures leave the row null so the worker retries.
+  const finish = (url) => clipId
+    ? rpc("wc_clipq_done", { p_secret: SECRET, p_clip: clipId, p_url: url })
+    : goalId
     ? rpc("wc_clip_done", { p_secret: SECRET, p_goal: goalId, p_url: url })
     : rpc("wc_reel_done", { p_secret: SECRET, p_match: matchId, p_url: url, p_status: "ready" });
-  const fail = (msg) => isClip ? Promise.resolve() : rpc("wc_reel_done", { p_secret: SECRET, p_match: matchId, p_url: msg, p_status: "error" });
+  const fail = (msg) => single ? Promise.resolve() : rpc("wc_reel_done", { p_secret: SECRET, p_match: matchId, p_url: msg, p_status: "error" });
 
   const work = mkdtempSync(join(tmpdir(), "reel-"));
   try {
