@@ -7,5 +7,5 @@
 [functions]
   node_bundler = "esbuild"
   # Ship the ffmpeg binary with the function bundle (esbuild can't bundle a binary).
-  included_files = ["node_modules/ffmpeg-static/ffmpeg"]
+  included_files = ["node_modules/ffmpeg-static/**"]
   external_node_modules = ["ffmpeg-static"]

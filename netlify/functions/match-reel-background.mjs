@@ -1,11 +1,9 @@
 // Full-time match highlight reel: download the match's clips, stitch with ffmpeg,
-// upload to Supabase Storage, and mark the row ready. Invoked (background, 15-min) by the
-// goal bot when a match has finished. Auth via a shared secret.
+// upload to Supabase Storage, mark the row ready (or 'error' with the reason). Background (15-min).
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import ffmpegPath from "ffmpeg-static";
 
 const SB_URL = process.env.SUPABASE_URL || "https://ckldrmyzmwnujzpxxjpt.supabase.co";
 const SVC = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -30,6 +28,9 @@ export default async (req) => {
 
   const work = mkdtempSync(join(tmpdir(), "reel-"));
   try {
+    const ffmpegPath = (await import("ffmpeg-static")).default;
+    if (!ffmpegPath || !existsSync(ffmpegPath)) { await mark(matchId, "error", `ERR: ffmpeg missing (${ffmpegPath})`); return new Response("no ffmpeg", { status: 200 }); }
+
     const files = [];
     for (let i = 0; i < clips.length; i++) {
       try {
@@ -42,7 +43,7 @@ export default async (req) => {
         files.push(f);
       } catch (_) {}
     }
-    if (!files.length) { await mark(matchId, "error", null); return new Response("no clips", { status: 200 }); }
+    if (!files.length) { await mark(matchId, "error", "ERR: no clips downloaded"); return new Response("no clips", { status: 200 }); }
 
     const out = join(work, "reel.mp4");
     const inputs = [];
@@ -58,8 +59,8 @@ export default async (req) => {
       "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out];
     const res = spawnSync(ffmpegPath, args, { maxBuffer: 1024 * 1024 * 64 });
     if (res.status !== 0 || !existsSync(out)) {
-      console.error("ffmpeg failed", (res.stderr && res.stderr.toString().slice(-600)) || res.error);
-      await mark(matchId, "error", null);
+      const why = (res.error && String(res.error)) || (res.stderr && res.stderr.toString().slice(-300)) || `exit ${res.status}`;
+      await mark(matchId, "error", `ERR: ffmpeg ${why}`);
       return new Response("ffmpeg failed", { status: 200 });
     }
 
@@ -70,13 +71,12 @@ export default async (req) => {
       headers: { Authorization: `Bearer ${SVC}`, apikey: SVC, "Content-Type": "video/mp4", "x-upsert": "true" },
       body: mp4,
     });
-    if (!up.ok) { console.error("upload failed", up.status, await up.text()); await mark(matchId, "error", null); return new Response("upload failed", { status: 200 }); }
+    if (!up.ok) { await mark(matchId, "error", `ERR: upload ${up.status} ${(await up.text()).slice(0, 120)}`); return new Response("upload failed", { status: 200 }); }
 
     await mark(matchId, "ready", `${SB_URL}/storage/v1/object/public/reels/${path}`);
     return new Response("ok", { status: 200 });
   } catch (e) {
-    console.error("reel error", e);
-    await mark(matchId, "error", null);
+    await mark(matchId, "error", `ERR: ${String(e).slice(0, 200)}`);
     return new Response("error", { status: 200 });
   } finally {
     try { rmSync(work, { recursive: true, force: true }); } catch (_) {}
