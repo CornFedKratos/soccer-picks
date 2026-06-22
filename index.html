@@ -983,6 +983,7 @@ async function fetchLeaders(){
         return {id:aid,n:a.n||('#'+aid),pos:a.p,tm:t.n||'',ab:t.a,v:ld.value};
       });
     });
+    try{ if(typeof sb!=='undefined' && sb){ const sr=await sb.rpc('wc_stats'); const sl=sr&&sr.data&&sr.data.leaders; if(sl){ Object.keys(sl).forEach(cat=>{ if((sl[cat]||[]).length) out[cat]=sl[cat]; }); } } }catch(_){ }
     if(Object.keys(out).length){ STATS.leaders=out; STATS.fetched=new Date().toISOString(); renderStats(); }
   }catch(e){ console.warn('leaders refresh failed, using baked',e); }
 }

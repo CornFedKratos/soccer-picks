@@ -393,6 +393,18 @@ swap(
   """function renderStats(){ try{ applyLiveLeaders(); }catch(_){} renderPulse();""",
   "renderStats applyLiveLeaders")
 
+# overlay the worker's authoritative per-match stats snapshot (assists/shots/saves/fouls/cards) over the
+# laggy ESPN leaders feed; accuratePasses has no per-match source so it stays from ESPN.
+swap(
+  """    if(Object.keys(out).length){ STATS.leaders=out; STATS.fetched=new Date().toISOString(); renderStats(); }
+  }catch(e){ console.warn('leaders refresh failed, using baked',e); }
+}""",
+  """    try{ if(typeof sb!=='undefined' && sb){ const sr=await sb.rpc('wc_stats'); const sl=sr&&sr.data&&sr.data.leaders; if(sl){ Object.keys(sl).forEach(cat=>{ if((sl[cat]||[]).length) out[cat]=sl[cat]; }); } } }catch(_){ }
+    if(Object.keys(out).length){ STATS.leaders=out; STATS.fetched=new Date().toISOString(); renderStats(); }
+  }catch(e){ console.warn('leaders refresh failed, using baked',e); }
+}""",
+  "fetchLeaders snapshot overlay")
+
 # 5) Add the Supabase JS library before the main script -----------------------
 SUPA_CDN = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
 if tpl.count('<script>') != 1: fail(f"expected 1 inline <script>, found {tpl.count('<script>')}")
