@@ -264,6 +264,19 @@ function advanceHint(teams, x){
   }
   var opp = mine.length===1 ? (mine[0][0]===me?mine[0][1]:mine[0][0]) : null;
   var vs = opp ? (' vs '+norm(opp)) : '';
+  function reachTop2(){
+    var k=rem.length, total=Math.pow(3,k);
+    for(var sc=0; sc<total; sc++){
+      var P=teams.map(function(t){return t.pts;}), G=teams.map(function(t){return t.gd;}), c=sc;
+      for(var r=0;r<k;r++){ var o=c%3; c=(c/3)|0; var hi=idx[rem[r][0]], ai=idx[rem[r][1]], inv=(rem[r][0]===me||rem[r][1]===me);
+        var oo=inv?(rem[r][0]===me?0:2):o, m=inv?50:1;
+        if(oo===0){P[hi]+=3;G[hi]+=m;G[ai]-=m;} else if(oo===1){P[hi]++;P[ai]++;} else {P[ai]+=3;G[ai]+=m;G[hi]-=m;} }
+      var ord=teams.map(function(t,i){return i;}).sort(function(a,b){return (P[b]-P[a])||(G[b]-G[a]);});
+      if(ord.indexOf(x)<2) return true;
+    }
+    return false;
+  }
+  if(!reachTop2()) return mine.length ? ('Out of the top-2 race — can only sneak in as a best third-place team: win'+vs+' big and hope other results fall right.') : 'Can only advance as one of the 8 best third-place teams.';
   if(guarantees('d')) return mine.length===1 ? ('Avoid defeat'+vs+' to reach the top 2.') : 'Draw or better in your remaining games to reach the top 2.';
   if(guarantees('w')) return mine.length===1 ? ('Win'+vs+' to reach the top 2.') : 'Win your remaining games to reach the top 2.';
   return mine.length===1 ? ('Win'+vs+' and depend on other results.') : 'Win out and depend on other results to advance.';
@@ -285,6 +298,69 @@ swap(
        +'<td>'+t.p+'</td><td>'+(t.gd>0?'+':'')+t.gd+'</td><td class="pts">'+t.pts+'</td>'
        +'<td class="stcell">'+statusBadge(st,hint)+'</td></tr>';}).join('');""",
   "groups row live+hint")
+
+# define current 3rd-place line per group so statuses() can judge the best-third (Alive) cutoff
+swap(
+  """  const top8=new Set(thirds.slice(0,8).map(x=>x.g));""",
+  """  const top8=new Set(thirds.slice(0,8).map(x=>x.g));
+  const THIRD_LINES=new Map(sorted.map(ss=>[ss.g,{pts:((ss.teams[2]||{}).pts)||0, gd:((ss.teams[2]||{}).gd)||0}]));""",
+  "THIRD_LINES")
+
+# GD-aware, realistic 3-state contention: IN (clinched top-2) / OUT (can't realistically advance) / alive
+swap(
+  """  function statuses(s){
+    const teams=s.teams, N=teams.length;
+    if(teams.every(t=>t.p>=3)) return teams.map((t,i)=> i<2?'in':(i===3?'out':(top8.has(s.g)?'in3':'out3')));
+    const names=new Set(teams.map(t=>t.t)); const rem=remOf(names);
+    const idx={}; teams.forEach((t,i)=>idx[t.t]=i); const base=teams.map(t=>t.pts);
+    const k=rem.length, total=Math.pow(3,k);
+    const clinch=Array(N).fill(true), third=Array(N).fill(false);
+    for(let scn=0;scn<total;scn++){
+      const pts=base.slice(); let c=scn;
+      for(let r=0;r<k;r++){const o=c%3;c=(c/3)|0;const hi=idx[rem[r][0]],ai=idx[rem[r][1]];
+        if(o===0)pts[hi]+=3; else if(o===1){pts[hi]++;pts[ai]++;} else pts[ai]+=3;}
+      for(let x=0;x<N;x++){let ge=0,ab=0;for(let y=0;y<N;y++){if(y===x)continue;if(pts[y]>=pts[x])ge++;if(pts[y]>pts[x])ab++;}
+        if(ge>1)clinch[x]=false; if(ab<=2)third[x]=true;}
+    }
+    return teams.map((t,x)=> clinch[x]?'in':(!third[x]?'out':'alive'));
+  }""",
+  """  function statuses(s){
+    const teams=s.teams, N=teams.length;
+    const names=new Set(teams.map(t=>t.t)); const rem=remOf(names);
+    const idx={}; teams.forEach((t,i)=>idx[t.t]=i);
+    const k=rem.length, total=Math.pow(3,k), BIG=50;
+    function ranksOf(f, mode){
+      const out=[];
+      for(let scn=0; scn<total; scn++){
+        const P=teams.map(t=>t.pts), G=teams.map(t=>t.gd); let c=scn;
+        for(let r=0;r<k;r++){ const o=c%3; c=(c/3)|0; const hi=idx[rem[r][0]], ai=idx[rem[r][1]], inv=(hi===f||ai===f);
+          let oo=o; if(inv){ const fHome=(hi===f); oo = mode==='best' ? (fHome?0:2) : (fHome?2:0); }
+          const m = inv?BIG:1;
+          if(oo===0){P[hi]+=3; G[hi]+=m; G[ai]-=m;} else if(oo===1){P[hi]++; P[ai]++;} else {P[ai]+=3; G[ai]+=m; G[hi]-=m;}
+        }
+        const ord=teams.map((t,i)=>i).sort((a,b)=>(P[b]-P[a])||(G[b]-G[a]));
+        out.push(ord.indexOf(f)+1);
+      }
+      return out;
+    }
+    return teams.map((t,x)=>{
+      const br=Math.min.apply(null, ranksOf(x,'best')), wr=Math.max.apply(null, ranksOf(x,'worst'));
+      if(wr<=2) return 'in';
+      if(br<=2) return 'alive';
+      if(br>=4) return 'out';
+      const own=rem.filter(g=>g[0]===t.t||g[1]===t.t).length;
+      const myPts=t.pts+3*own, myGd=t.gd+2*own;
+      let behind=0; THIRD_LINES.forEach((ln,g)=>{ if(g!==s.g && (ln.pts>myPts || (ln.pts===myPts && ln.gd>myGd))) behind++; });
+      return behind>=8 ? 'out' : 'alive';
+    });
+  }""",
+  "statuses GD-aware")
+
+# legend: 3-state wording
+swap(
+  """      <div class="sub">Top 2 of each group advance, plus the 8 best third-place teams · <b style="color:var(--win)">IN</b> clinched · <b style="color:var(--loss)">OUT</b> eliminated · <span style="color:var(--faint)">* = provisional via 3rd</span></div>""",
+  """      <div class="sub">Top 2 of each group advance, plus the 8 best third-place teams · <b style="color:var(--win)">IN</b> clinched · <b style="color:var(--loss)">OUT</b> can't realistically advance · <b style="color:var(--gold)">ALIVE</b> still in contention</div>""",
+  "legend 3-state")
 
 # 5) Add the Supabase JS library before the main script -----------------------
 SUPA_CDN = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
