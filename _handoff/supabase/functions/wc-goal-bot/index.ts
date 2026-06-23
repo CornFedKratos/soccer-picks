@@ -185,17 +185,29 @@ async function reelSources(match_id: string, home: string, away: string, ymd?: s
 // proxy — datacenter IPs get 403/429 hitting Reddit directly. Fail-safe: returns [] on ANY error
 // (incl. runtimes without Deno.createHttpClient), so a Reddit/proxy problem never breaks the tick.
 let redditDiag = "init";
+const RDT_URL = "https://www.reddit.com/r/soccer/new/.rss?limit=50";
+const RDT_UA = { "user-agent": "soccer-picks/1.0 (clip discovery)" };
 async function redditClipPosts(): Promise<{ title: string; url: string; hostId: string }[]> {
-  if (!RESI_PROXY) { redditDiag = "no-proxy"; return []; }
+  // 1) try direct from Supabase's own IP — RSS may not be datacenter-blocked like the .json API is
+  try {
+    const rd = await fetch(RDT_URL, { headers: RDT_UA });
+    if (rd.ok) {
+      const xml = await rd.text(); const posts = parseGoalPostsFromFeed(xml);
+      redditDiag = `direct ${rd.status} bytes=${xml.length} posts=${posts.length}`;
+      return posts;
+    }
+    redditDiag = `direct ${rd.status}`;
+  } catch (e) { redditDiag = "direct ERR " + String(e).slice(0, 70); }
+  // 2) fallback: residential proxy
+  if (!RESI_PROXY) return [];
   try {
     const client = (Deno as any).createHttpClient({ proxy: { url: RESI_PROXY } });
-    const r = await fetch("https://www.reddit.com/r/soccer/new/.rss?limit=50",
-      { client, headers: { "user-agent": "soccer-picks/1.0 (clip discovery)" } } as any);
+    const r = await fetch(RDT_URL, { client, headers: RDT_UA } as any);
     const xml = r.ok ? await r.text() : "";
     const posts = r.ok ? parseGoalPostsFromFeed(xml) : [];
-    redditDiag = `status=${r.status} bytes=${xml.length} posts=${posts.length}`;
+    redditDiag += ` | proxy ${r.status} bytes=${xml.length} posts=${posts.length}`;
     return posts;
-  } catch (e) { redditDiag = "ERR " + String(e).slice(0, 140); return []; }
+  } catch (e) { redditDiag += " | proxy ERR " + String(e).slice(0, 70); return []; }
 }
 
 // Kick off ffmpeg compression of one streamff clip via the Netlify function -> reels/clips/<m>_<clipId>.mp4.
