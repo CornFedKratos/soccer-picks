@@ -598,23 +598,14 @@ Deno.serve(async (req) => {
         if (doneIds.has(m.match_id)) continue;
         if (processed >= 8) break;
         processed++;
-        const src = await reelSources(m.match_id, m.home, m.away, String(m.kickoff).slice(0, 10));
-        if (src.streamff.length >= 2) {
-          // ad-free path: stitch our own short reel from streamff clips
-          let token = null;
-          try { const s = await sb.storage.from("reels").createSignedUploadUrl(`${m.match_id}.mp4`, { upsert: true }); token = (s as any)?.data?.token; } catch (_) {}
-          if (!token) continue;
-          const secret = await getVault("reel_trigger_secret");
-          let ok = false;
-          try {
-            const r = await fetch(REEL_FN, { method: "POST", headers: { "content-type": "application/json" },
-              body: JSON.stringify({ secret, matchId: m.match_id, uploadToken: token, clips: src.streamff.map((c) => ({ label: c.label, url: c.url })) }) });
-            ok = r.ok || r.status === 202;
-          } catch (_) {}
-          if (ok) { await sb.from("match_reels").insert({ match_id: m.match_id, status: "rendering", attempts: 1 }); out.reelsQueued++; }
-        } else if (src.youtube) {
-          // no streamff reel: embed a US-available YouTube highlight (no download/storage)
-          await sb.from("match_reels").insert({ match_id: m.match_id, status: "embed", url: src.youtube, attempts: 1 });
+        const pick = await pickBestReel(m);
+        if (pick.type === "global" || pick.type === "geo" || pick.type === "stitch") {
+          if (await triggerReel(m.match_id, pick)) {
+            await sb.from("match_reels").insert({ match_id: m.match_id, status: "rendering", attempts: 1 });
+            out.reelsQueued++;
+          }
+        } else if (pick.type === "embed") {
+          await sb.from("match_reels").insert({ match_id: m.match_id, status: "embed", url: pick.url, attempts: 1 });
           out.embeds++;
         } else {
           await sb.from("match_reels").insert({ match_id: m.match_id, status: "noclips", attempts: 1 });
