@@ -382,6 +382,7 @@ Deno.serve(async (req) => {
     if (!firstRun) {
       const liveish = matchRows.filter((m) => (m.state === "in" || m.state === "post") && (Date.now() - new Date(m.kickoff).getTime()) <= 4 * 3600 * 1000);
       const redditPosts = liveish.length ? await redditClipPosts() : [];
+      (out as any).redditPosts = redditPosts.length;
       for (const m of liveish) {
         const src = await reelSources(m.match_id, m.home, m.away, String(m.kickoff).slice(0, 10));
         for (const c of src.streamff) {
