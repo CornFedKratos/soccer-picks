@@ -4,6 +4,7 @@
 // delivered after a confirmed ok send (otherwise they retry).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { deriveHostId, parseGoalPostsFromFeed, teamMatchesTitle } from "./reddit.ts";
+import { isFullReel, channelCountry } from "./reels.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -18,6 +19,16 @@ const REEL_FN = "https://soccer-picks.netlify.app/.netlify/functions/match-reel-
 const REEL_DELAY_MIN = 10;
 const RESI_PROXY = Deno.env.get("RESI_PROXY_URL") || await getVault("resi_proxy_url");
 const RESI_PROXIES = (Deno.env.get("RESI_PROXY_URLS") || "").split(",").map((s) => s.trim()).filter(Boolean);
+// Country-tagged proxy pool for geo-locked reel downloads: "gb:http://...,es:http://...,us:..."
+const GEO_PROXIES: Record<string, string[]> = {};
+for (const part of (Deno.env.get("RESI_PROXY_GEO") || "").split(",").map((s) => s.trim()).filter(Boolean)) {
+  const i = part.indexOf(":");
+  if (i <= 0) continue;
+  const cc = part.slice(0, i), url = part.slice(i + 1);
+  (GEO_PROXIES[cc] ||= []).push(url);
+}
+const proxyForCountry = (cc: string | null): string | null => (cc && GEO_PROXIES[cc]?.length) ? GEO_PROXIES[cc][0] : null;
+const anyProxy = (): string | null => Object.values(GEO_PROXIES).flat()[0] || RESI_PROXIES[0] || RESI_PROXY || null;
 
 const ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard";
 const SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=";
