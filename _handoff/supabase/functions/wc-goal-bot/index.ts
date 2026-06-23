@@ -189,10 +189,19 @@ let redditDiag = "init";
 const RDT_URL = "https://www.reddit.com/r/soccer/new/.rss?limit=50";
 const RDT_UA = { "user-agent": "soccer-picks/1.0 (clip discovery)" };
 async function redditClipPosts(): Promise<{ title: string; url: string; hostId: string }[]> {
-  // Reddit blocks datacenter IPs (403) and rate-limits hot shared proxy IPs (429), so rotate across
-  // the proxy pool: start at a per-minute offset, try up to 5, skip throttled/failed exit IPs.
+  // 1) try direct from Supabase's IP first — Reddit's datacenter block on RSS is inconsistent
+  // (sometimes 200, sometimes 403), and direct is free (saves the proxy's metered bandwidth).
+  try {
+    const rd = await fetch(RDT_URL, { headers: RDT_UA });
+    if (rd.ok) {
+      const xml = await rd.text(); const posts = parseGoalPostsFromFeed(xml);
+      redditDiag = `direct bytes=${xml.length} posts=${posts.length}`;
+      return posts;
+    }
+  } catch (_) {}
+  // 2) on 403/error, rotate the proxy pool: per-minute start offset, try up to 5, skip throttled IPs.
   const proxies = RESI_PROXIES.length ? RESI_PROXIES : (RESI_PROXY ? [RESI_PROXY] : []);
-  if (!proxies.length) { redditDiag = "no-proxy"; return []; }
+  if (!proxies.length) { redditDiag = "direct-fail no-proxy"; return []; }
   const start = Math.floor(Date.now() / 60000) % proxies.length;
   const tries = Math.min(proxies.length, 5);
   let last = "";
