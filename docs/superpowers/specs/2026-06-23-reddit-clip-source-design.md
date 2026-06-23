@@ -144,3 +144,37 @@ by both becomes one row; whichever tick inserts first wins; the converter runs o
 For a live match with goals, a clip appears in `clips` (Reddit-sourced) and ships to
 subscribers within ~1–2 min of being posted to the r/soccer thread — measurably earlier
 than Highlightly for the same goal, verified via `clips.detected_at` telemetry.
+
+---
+
+## REVISION 2 (2026-06-23) — pivot to public RSS submissions feed via proxy
+
+**Why:** Reddit's OAuth Data API now requires pre-approval (2–4 weeks) for ALL apps incl.
+personal — the create-app gate. AND the original assumption (clips live in match-thread
+*comments*) was wrong: tracing the clip origin showed goal clips are r/soccer **posts
+(submissions)** titled `Team [score] - score Team - Scorer min'` linking to streamff/
+streamin (confirmed live, and matches multiple working OSS bots e.g. fenneh/discord-epl-
+goal-clips which monitor r/soccer submissions). Crucially, the public **`.rss` submission
+feed needs no app/OAuth/approval** and returns 200 through our existing residential proxy
+(JSON is 403 from datacenter; RSS is not part of the gated Data API program).
+
+**Revised approach (supersedes the comments/OAuth design above):**
+- Poll **`https://www.reddit.com/r/soccer/new/.rss`** once per cron tick via the residential
+  proxy (`Deno.createHttpClient({ proxy: { url } })` — verified working in standard Deno;
+  Supabase-edge-runtime support is a deploy-time check, fallback = route the fetch through
+  the Netlify function which has confirmed proxy egress).
+- Parse Atom entries; for each entry extract a clip-host link from its `<content>` via
+  `extractClipLinks`. Match the post `<title>` to a currently-live match by both teams'
+  longest tokens (`teamMatchesTitle`). Upsert matches into `clips` (`clip_id = hostId`,
+  `descr = post title` — richer than Highlightly: gives scorer+minute+score).
+- The existing resolver/converter/relay/dedupe pipeline is unchanged.
+
+**Dropped from the original design:** OAuth (`redditAuth`), Vault `reddit_client_id`/
+`reddit_secret`, the manual Reddit-app step (Task 0), per-match thread discovery
+(`findMatchThread`), comments scanning (`parseClipsFromComments`/`parseThreadFromSearch`),
+and the `matches.reddit_thread_id` column (now unused; left in place, harmless). One feed
+covers ALL live matches per tick — simpler than per-match discovery.
+
+**New Vault secret:** `resi_proxy_url` (the worker reads it to build the proxy client).
+ToS note: RSS is public and non-Data-API; use is non-commercial, <50 users, ~1 req/min —
+gray-area but low-risk, with ESPN alerts + Highlightly as fallback.
