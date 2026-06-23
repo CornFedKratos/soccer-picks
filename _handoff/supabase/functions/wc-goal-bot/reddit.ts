@@ -30,3 +30,25 @@ export function extractClipLinks(text: string): { url: string; hostId: string }[
   }
   return out;
 }
+
+const rnorm = (s: string) =>
+  (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+// longest alphabetic token in a team name (e.g. "DR Congo" -> "congo")
+const longestTok = (s: string) =>
+  rnorm(s).split(/[^a-z]+/).filter((w) => w.length >= 3).sort((a, b) => b.length - a.length)[0] || rnorm(s);
+
+export function parseThreadFromSearch(
+  json: any, home: string, away: string,
+): { id: string; title: string } | null {
+  const h = longestTok(home), a = longestTok(away);
+  const kids = json?.data?.children || [];
+  for (const k of kids) {
+    const title = String(k?.data?.title || "");
+    const t = rnorm(title);
+    if (t.includes("match thread") && !t.includes("post match") && !t.includes("pre match")
+        && t.includes(h) && t.includes(a)) {
+      return { id: String(k.data.id), title };
+    }
+  }
+  return null;
+}

@@ -37,3 +37,27 @@ Deno.test("extractClipLinks: multiple distinct hosts", () => {
   const r = extractClipLinks("https://streamin.link/v/aaaaaa1 https://dubz.link/v/bbbbbb2");
   assertEquals(r.length, 2);
 });
+
+import { parseThreadFromSearch } from "./reddit.ts";
+
+const searchJson = {
+  data: { children: [
+    { data: { id: "zz111", title: "Post Match Thread: Portugal 3-0 Uzbekistan" } },
+    { data: { id: "ab222", title: "Match Thread: Portugal vs Uzbekistan | FIFA World Cup" } },
+    { data: { id: "cd333", title: "Match Thread: France vs Iraq" } },
+  ] },
+};
+
+Deno.test("parseThreadFromSearch: matches by team tokens, ignores post-match", () => {
+  const r = parseThreadFromSearch(searchJson, "Portugal", "Uzbekistan");
+  assertEquals(r?.id, "ab222");
+});
+Deno.test("parseThreadFromSearch: token match handles name ordering", () => {
+  const j = { data: { children: [
+    { data: { id: "ee444", title: "Match Thread: Portugal vs DR Congo" } },
+  ] } };
+  assertEquals(parseThreadFromSearch(j, "Congo DR", "Portugal")?.id, "ee444");
+});
+Deno.test("parseThreadFromSearch: no match returns null", () => {
+  assertEquals(parseThreadFromSearch(searchJson, "Brazil", "Spain"), null);
+});
