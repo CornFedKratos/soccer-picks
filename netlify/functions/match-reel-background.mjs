@@ -40,34 +40,49 @@ async function isMedia(u) {
   } catch (_) { return false; }
 }
 
-// Dynamically resolve a streamff share URL (or any page) to a downloadable mp4/m3u8. No hardcoded host:
-// try the legacy CDN, then scrape the page + its JS bundle for any media URL or CDN base + id, and verify.
+// Resolve a highlight share URL to a downloadable mp4/m3u8 — fully self-healing, NO reliance on a fixed
+// host. The share page URL comes live from Highlightly each run, so we just read whatever it currently
+// points to: scrape the page for a direct media URL or CDN base, then (only if needed) its referenced
+// scripts (covers JS-gated pages), then a hardcoded fast-path as last resort. Every candidate is verified
+// by fetching bytes. If the provider switches host/domain again, the page references the new one → it resolves.
 async function resolveMedia(input) {
   if (/\.(mp4|m3u8)(\?|$)/i.test(input) && await isMedia(input)) return input;
   const idm = String(input).match(/\/v\/([a-z0-9]+)/i);
   const id = idm ? idm[1] : null;
+  let origin = ""; try { origin = new URL(input).origin; } catch (_) {}
   const cand = [], tried = new Set();
-  const add = (x) => { if (x && !tried.has(x)) { tried.add(x); cand.push(x); } };
-  // streamin.top (current Highlightly host, rebranded from streamff) serves at <x>-cdn.streamin.top/uploads/<id>.mp4
-  if (id) {
-    for (const h of ["c-cdn", "b-cdn", "w-cdn"]) add(`https://${h}.streamin.top/uploads/${id}.mp4`);
-    add(`https://cdn.streamff.one/${id}.mp4`); // legacy
-  }
+  const add = (x) => {
+    if (!x) return;
+    x = x.replace(/\\u002f/gi, "/").replace(/\\\//g, "/").replace(/&amp;/g, "&");
+    if (/^https?:\/\//i.test(x) && !tried.has(x)) { tried.add(x); cand.push(x); }
+  };
+  // discover media URLs + CDN bases from any text (page HTML or a script body)
+  const scrape = (txt) => {
+    for (const m of txt.matchAll(/https?:\\?\/\\?\/[^"'\s\\)#]+\.(?:mp4|m3u8)/gi)) add(m[0]);
+    if (id) for (const m of txt.matchAll(/https?:\/\/[a-z0-9.-]*(?:cdn|stream|video|media|bunny|wasabi|backblaze|b2|r2|cloudflarestorage)[a-z0-9.-]*/gi)) {
+      const b = m[0].replace(/\/+$/, ""); add(b + "/uploads/" + id + ".mp4"); add(b + "/" + id + ".mp4");
+    }
+  };
+  const verify = async () => { for (const c of cand) { if (await isMedia(c)) return c; } return null; };
   try {
     const r = await fetch(String(input), { headers: { "user-agent": UA } });
     if (r.ok) {
       const html = await r.text();
-      const grab = (txt) => {
-        for (const m of txt.matchAll(/https?:\\?\/\\?\/[^"'\s\\)#]+\.(?:mp4|m3u8)/gi)) add(m[0].replace(/\\u002f/gi, "/").replace(/\\\//g, "/"));
-        if (id) for (const m of txt.matchAll(/https?:\/\/[a-z0-9.-]*(?:cdn|stream|video|media|bunnycdn|r2|cloudflarestorage)[a-z0-9.-]*/gi)) {
-          const base = m[0].replace(/\/+$/, ""); add(base + "/uploads/" + id + ".mp4"); add(base + "/" + id + ".mp4");
-        }
-      };
-      grab(html);
+      scrape(html);
+      let hit = await verify(); if (hit) return hit;        // common case: page has the media URL
+      // JS-gated pages: scrape the page's own referenced scripts, then re-verify
+      const scripts = [...html.matchAll(/<script[^>]+src="([^"]+\.js)"/gi)].map((m) => m[1]).slice(0, 14);
+      for (const s of scripts) {
+        if (cand.length > 12) break;
+        const su = /^https?:\/\//i.test(s) ? s : origin + (s.startsWith("/") ? "" : "/") + s;
+        try { const sr = await fetch(su, { headers: { "user-agent": UA } }); if (sr.ok) scrape(await sr.text()); } catch (_) {}
+      }
+      hit = await verify(); if (hit) return hit;
     }
   } catch (_) {}
-  for (const c of cand) { if (await isMedia(c)) return c; }
-  return null;
+  // last-resort fast-path (safe if stale): current provider hosts + legacy
+  if (id) { for (const h of ["c-cdn", "b-cdn", "w-cdn"]) add(`https://${h}.streamin.top/uploads/${id}.mp4`); add(`https://cdn.streamff.one/${id}.mp4`); }
+  return await verify();
 }
 
 export default async (req) => {
