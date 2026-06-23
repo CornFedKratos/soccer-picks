@@ -193,6 +193,58 @@ async function reelSources(match_id: string, home: string, away: string, ymd?: s
   } catch (_) { return empty; }
 }
 
+// Choose the best available full-game highlight for a finished match, by priority:
+// global official reel (download) > geo-locked official reel (download via region proxy) >
+// stitch (>=2 downloadable clips) > US-only embed link.
+async function pickBestReel(m: any): Promise<
+  { type: "global" | "geo" | "stitch" | "embed" | "none"; url?: string; proxyUrl?: string | null; clips?: any[] }
+> {
+  let globalUrl: string | null = null, geo: { url: string; proxyUrl: string } | null = null, embedUrl: string | null = null;
+  if (HL_KEY) {
+    try {
+      const mid = await hlMatchId(m.match_id, m.home, m.away, String(m.kickoff).slice(0, 10));
+      const hl = mid ? await hlHighlights(mid) : [];
+      for (const c of hl) {
+        if (String(c.source || "").toLowerCase() !== "youtube") continue;
+        const title = String(c.title || ""), ch = String(c.channel || "").toLowerCase();
+        if (!isFullReel(title)) continue;
+        const url = c.embedUrl || c.url;
+        if (!url) continue;
+        const blocked = YT_BLOCK.some((b) => ch.includes(b));
+        if (!blocked && YT_PREF.some((p) => ch.includes(p.toLowerCase()))) {
+          globalUrl ||= url; embedUrl ||= url;
+        } else if (blocked) {
+          const px = proxyForCountry(channelCountry(ch));
+          if (px && !geo) geo = { url, proxyUrl: px };
+        }
+      }
+    } catch (_) {}
+  }
+  if (globalUrl) return { type: "global", url: globalUrl, proxyUrl: anyProxy() };
+  if (geo) return { type: "geo", url: geo.url, proxyUrl: geo.proxyUrl };
+  const cl = await sb.from("clips").select("src_url,descr").eq("match_id", m.match_id).limit(12);
+  const clips = (cl.data || []).filter((x: any) => x.src_url);
+  if (clips.length >= 2) return { type: "stitch", clips: clips.map((x: any) => ({ label: x.descr, url: x.src_url })) };
+  if (embedUrl) return { type: "embed", url: embedUrl };
+  return { type: "none" };
+}
+
+// Kick the Netlify converter to render reels/<matchId>.mp4 from a reel result. YouTube (global/geo)
+// sends a single URL + proxy (region proxy for geo) at <=360p; stitch sends the clip list.
+async function triggerReel(matchId: string, pick: { type: string; url?: string; proxyUrl?: string | null; clips?: any[] }): Promise<boolean> {
+  let token: any = null;
+  try { const s = await sb.storage.from("reels").createSignedUploadUrl(`${matchId}.mp4`, { upsert: true }); token = (s as any)?.data?.token; } catch (_) {}
+  if (!token) return false;
+  const secret = await getVault("reel_trigger_secret");
+  const body: any = { secret, matchId, uploadToken: token };
+  if (pick.type === "stitch") { body.clips = pick.clips; }
+  else { body.clips = [{ url: pick.url }]; body.proxyUrl = pick.proxyUrl || anyProxy(); body.maxHeight = 360; }
+  try {
+    const r = await fetch(REEL_FN, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    return r.ok || r.status === 202;
+  } catch (_) { return false; }
+}
+
 // Pull goal-clip posts from r/soccer's public submissions RSS (no OAuth) via the residential
 // proxy — datacenter IPs get 403/429 hitting Reddit directly. Fail-safe: returns [] on ANY error
 // (incl. runtimes without Deno.createHttpClient), so a Reddit/proxy problem never breaks the tick.
