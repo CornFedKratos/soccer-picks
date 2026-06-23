@@ -28,7 +28,9 @@ for (const part of (Deno.env.get("RESI_PROXY_GEO") || "").split(",").map((s) => 
   (GEO_PROXIES[cc] ||= []).push(url);
 }
 const proxyForCountry = (cc: string | null): string | null => (cc && GEO_PROXIES[cc]?.length) ? GEO_PROXIES[cc][0] : null;
-const anyProxy = (): string | null => Object.values(GEO_PROXIES).flat()[0] || RESI_PROXIES[0] || RESI_PROXY || null;
+// Prefer a US proxy for global/US-channel reels — ESPN/CBS reels are US-geo-restricted and 403
+// ("not available in your country") through a non-US IP. FIFA's global reels work from anywhere.
+const anyProxy = (): string | null => GEO_PROXIES["us"]?.[0] || Object.values(GEO_PROXIES).flat()[0] || RESI_PROXIES[0] || RESI_PROXY || null;
 
 const ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard";
 const SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=";
