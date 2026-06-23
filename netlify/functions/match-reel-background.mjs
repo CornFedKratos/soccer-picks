@@ -7,7 +7,7 @@
 //   Clip mode:  { clipId|goalId, outName, clips:[{url}], uploadToken } -> reels/<outName>, wc_clipq_done/wc_clip_done
 // clips[].url may be a streamff PAGE url (e.g. streamff.pro/v/<id>) or a direct media url; resolveMedia() figures it out.
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync, statSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ProxyAgent } from "undici";
@@ -108,6 +108,30 @@ async function resolveMedia(input) {
   return await verify();
 }
 
+const isYouTube = (u) => /youtu\.?be|youtube\.com/i.test(String(u));
+const YTDLP_PATH = join(tmpdir(), "yt-dlp_linux");
+// Fetch the standalone yt-dlp binary once per cold start (cached on warm invocations).
+async function ensureYtdlp() {
+  if (existsSync(YTDLP_PATH)) { try { if (statSync(YTDLP_PATH).size > 1_000_000) return YTDLP_PATH; } catch (_) {} }
+  const r = await fetch("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux", { redirect: "follow" });
+  if (!r.ok) throw new Error(`ytdlp fetch ${r.status}`);
+  writeFileSync(YTDLP_PATH, Buffer.from(await r.arrayBuffer())); chmodSync(YTDLP_PATH, 0o755);
+  return YTDLP_PATH;
+}
+// Download a YouTube video (<=720p) through the residential proxy (defeats the datacenter bot-check)
+// to a temp mp4; returns the file path or null.
+async function downloadYouTube(url, ffmpegPath, work, idx) {
+  let ytdlp; try { ytdlp = await ensureYtdlp(); } catch (_) { return null; }
+  const out = join(work, `yt${idx}.mp4`);
+  const args = [url, "-f", "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]/b",
+    "--merge-output-format", "mp4", "--ffmpeg-location", ffmpegPath,
+    "--no-playlist", "--no-progress", "--no-warnings", "--no-cache-dir", "--force-ipv4",
+    "--retries", "2", "--fragment-retries", "2", "-o", out];
+  if (RESI_PROXY_URL) args.push("--proxy", RESI_PROXY_URL);
+  const res = spawnSync(ytdlp, args, { maxBuffer: 1024 * 1024 * 64, timeout: 8 * 60 * 1000, env: { ...process.env, HOME: work } });
+  return (res.status === 0 && existsSync(out)) ? out : null;
+}
+
 export default async (req) => {
   let body = {};
   try { body = await req.json(); } catch (_) {}
@@ -134,6 +158,12 @@ export default async (req) => {
     // since ffmpeg can't use the undici proxy; open hosts (bunny CDN etc.) ffmpeg reads directly.
     const media = [];
     for (let i = 0; i < clips.length; i++) {
+      // YouTube (official FIFA/ESPN clips): download via yt-dlp through the proxy to a temp file
+      if (isYouTube(clips[i].url)) {
+        const yf = await downloadYouTube(clips[i].url, ffmpegPath, work, i);
+        if (yf) media.push(yf);
+        continue;
+      }
       const u = await resolveMedia(clips[i].url);
       if (!u) continue;
       if (proxyAgent && NEEDS_PROXY(u)) {
