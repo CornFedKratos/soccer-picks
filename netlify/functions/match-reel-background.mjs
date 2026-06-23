@@ -110,25 +110,32 @@ async function resolveMedia(input) {
 
 const isYouTube = (u) => /youtu\.?be|youtube\.com/i.test(String(u));
 const YTDLP_PATH = join(tmpdir(), "yt-dlp_linux");
+const L = (...a) => { try { console.log("[reel]", ...a); } catch (_) {} };
 // Fetch the standalone yt-dlp binary once per cold start (cached on warm invocations).
 async function ensureYtdlp() {
-  if (existsSync(YTDLP_PATH)) { try { if (statSync(YTDLP_PATH).size > 1_000_000) return YTDLP_PATH; } catch (_) {} }
+  if (existsSync(YTDLP_PATH)) { try { if (statSync(YTDLP_PATH).size > 1_000_000) { L("ytdlp cached", statSync(YTDLP_PATH).size); return YTDLP_PATH; } } catch (_) {} }
+  L("ytdlp fetching binary...");
   const r = await fetch("https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux", { redirect: "follow" });
+  L("ytdlp fetch status", r.status);
   if (!r.ok) throw new Error(`ytdlp fetch ${r.status}`);
   writeFileSync(YTDLP_PATH, Buffer.from(await r.arrayBuffer())); chmodSync(YTDLP_PATH, 0o755);
+  L("ytdlp written", statSync(YTDLP_PATH).size);
   return YTDLP_PATH;
 }
 // Download a YouTube video (<=720p) through the residential proxy (defeats the datacenter bot-check)
 // to a temp mp4; returns the file path or null.
 async function downloadYouTube(url, ffmpegPath, work, idx) {
-  let ytdlp; try { ytdlp = await ensureYtdlp(); } catch (_) { return null; }
+  let ytdlp; try { ytdlp = await ensureYtdlp(); } catch (e) { L("ensureYtdlp FAILED", String(e)); return null; }
   const out = join(work, `yt${idx}.mp4`);
   const args = [url, "-f", "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]/b",
     "--merge-output-format", "mp4", "--ffmpeg-location", ffmpegPath,
     "--no-playlist", "--no-progress", "--no-warnings", "--no-cache-dir", "--force-ipv4",
     "--retries", "2", "--fragment-retries", "2", "-o", out];
   if (RESI_PROXY_URL) args.push("--proxy", RESI_PROXY_URL);
+  L("yt-dlp spawn", url, "proxy=" + (RESI_PROXY_URL ? "yes" : "no"));
   const res = spawnSync(ytdlp, args, { maxBuffer: 1024 * 1024 * 64, timeout: 8 * 60 * 1000, env: { ...process.env, HOME: work } });
+  L("yt-dlp exit", res.status, "spawnErr=" + (res.error ? String(res.error) : "none"),
+    "exists=" + existsSync(out), "stderrTail=" + ((res.stderr && res.stderr.toString().slice(-600)) || ""));
   return (res.status === 0 && existsSync(out)) ? out : null;
 }
 
@@ -139,6 +146,7 @@ export default async (req) => {
   const { matchId, goalId, clipId, clips, uploadToken } = body;
   const single = !!(goalId || clipId);
   const outName = body.outName || `${matchId}.mp4`;
+  L("invoke", "clipId=" + clipId, "matchId=" + matchId, "clips=" + (Array.isArray(clips) ? clips.length : 0), "proxy=" + (RESI_PROXY_URL ? "set" : "unset"));
   if (!uploadToken || !Array.isArray(clips) || !clips.length || (!matchId && !goalId && !clipId)) return new Response("bad request", { status: 400 });
 
   const finish = (url) => clipId
@@ -158,9 +166,11 @@ export default async (req) => {
     // since ffmpeg can't use the undici proxy; open hosts (bunny CDN etc.) ffmpeg reads directly.
     const media = [];
     for (let i = 0; i < clips.length; i++) {
+      L("clip", i, clips[i].url, "isYouTube=" + isYouTube(clips[i].url));
       // YouTube (official FIFA/ESPN clips): download via yt-dlp through the proxy to a temp file
       if (isYouTube(clips[i].url)) {
         const yf = await downloadYouTube(clips[i].url, ffmpegPath, work, i);
+        L("downloadYouTube ->", yf ? "OK " + yf : "NULL");
         if (yf) media.push(yf);
         continue;
       }
@@ -178,7 +188,8 @@ export default async (req) => {
         media.push(u);
       }
     }
-    if (!media.length) { await fail("ERR: no media resolved"); return new Response("no media", { status: 200 }); }
+    L("media resolved", media.length);
+    if (!media.length) { L("FAIL no media"); await fail("ERR: no media resolved"); return new Response("no media", { status: 200 }); }
 
     // ffmpeg reads remote URLs or local temp files (handles mp4 + m3u8); transcode to a small, uniform reel
     const out = join(work, "reel.mp4");
@@ -193,18 +204,23 @@ export default async (req) => {
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-maxrate", "1400k", "-bufsize", "2800k",
       "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out];
     const res = spawnSync(ffmpegPath, args, { maxBuffer: 1024 * 1024 * 64, timeout: 12 * 60 * 1000 });
+    L("ffmpeg exit", res.status, "exists=" + existsSync(out));
     if (res.status !== 0 || !existsSync(out)) {
+      L("FAIL ffmpeg", (res.error && String(res.error)) || (res.stderr && res.stderr.toString().slice(-300)) || res.status);
       await fail(`ERR: ffmpeg ${(res.error && String(res.error)) || (res.stderr && res.stderr.toString().slice(-200)) || res.status}`);
       return new Response("ffmpeg failed", { status: 200 });
     }
 
     const mp4 = readFileSync(out);
+    L("transcoded bytes", mp4.length, "uploading to", outName);
     const up = await fetch(`${SB_URL}/storage/v1/object/upload/sign/reels/${outName}?token=${encodeURIComponent(uploadToken)}`, {
       method: "PUT", headers: { "Content-Type": "video/mp4", "x-upsert": "true" }, body: mp4 });
-    if (!up.ok) { await fail(`ERR: upload ${up.status} ${(await up.text()).slice(0, 120)}`); return new Response("upload failed", { status: 200 }); }
+    L("upload status", up.status);
+    if (!up.ok) { L("FAIL upload", up.status); await fail(`ERR: upload ${up.status} ${(await up.text()).slice(0, 120)}`); return new Response("upload failed", { status: 200 }); }
 
     // cache-bust the public URL so Telegram never serves a stale failure cached against a reused path
     await finish(`${SB_URL}/storage/v1/object/public/reels/${outName}?c=${Date.now()}`);
+    L("DONE finished clip", clipId || goalId || matchId);
     return new Response("ok", { status: 200 });
   } catch (e) {
     await fail(`ERR: ${String(e).slice(0, 200)}`);
