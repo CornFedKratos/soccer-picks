@@ -195,7 +195,10 @@ export default async (req) => {
     const out = join(work, "reel.mp4");
     const inputs = [], filt = [], maps = [];
     media.forEach((u, i) => {
-      inputs.push("-user_agent", UA, "-i", u);
+      // -user_agent is an HTTP-protocol option — only valid for remote URL inputs, NOT local temp files
+      // (yt-dlp downloads, proxied streamain clips). Applying it to a file input makes ffmpeg abort.
+      if (/^https?:\/\//i.test(u)) inputs.push("-user_agent", UA);
+      inputs.push("-i", u);
       filt.push(`[${i}:v]scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v${i}];[${i}:a]aresample=48000[a${i}]`);
       maps.push(`[v${i}][a${i}]`);
     });
