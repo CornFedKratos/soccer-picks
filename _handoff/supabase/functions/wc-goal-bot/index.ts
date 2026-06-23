@@ -185,14 +185,15 @@ async function reelSources(match_id: string, home: string, away: string, ymd?: s
 // proxy — datacenter IPs get 403/429 hitting Reddit directly. Fail-safe: returns [] on ANY error
 // (incl. runtimes without Deno.createHttpClient), so a Reddit/proxy problem never breaks the tick.
 async function redditClipPosts(): Promise<{ title: string; url: string; hostId: string }[]> {
-  if (!RESI_PROXY) return [];
+  if (!RESI_PROXY) { console.log("[reddit] no RESI_PROXY"); return []; }
   try {
     const client = (Deno as any).createHttpClient({ proxy: { url: RESI_PROXY } });
     const r = await fetch("https://www.reddit.com/r/soccer/new/.rss?limit=50",
       { client, headers: { "user-agent": "soccer-picks/1.0 (clip discovery)" } } as any);
-    if (!r.ok) return [];
-    return parseGoalPostsFromFeed(await r.text());
-  } catch (_) { return []; }
+    const posts = r.ok ? parseGoalPostsFromFeed(await r.text()) : [];
+    console.log("[reddit] rss status", r.status, "clip-posts", posts.length);
+    return posts;
+  } catch (e) { console.log("[reddit] ERR", String(e).slice(0, 160)); return []; }
 }
 
 // Kick off ffmpeg compression of one streamff clip via the Netlify function -> reels/clips/<m>_<clipId>.mp4.
