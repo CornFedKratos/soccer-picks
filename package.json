@@ -3,6 +3,7 @@
   "private": true,
   "description": "World Cup board static site + match-reel background function",
   "dependencies": {
-    "ffmpeg-static": "^5.2.0"
+    "ffmpeg-static": "^5.2.0",
+    "undici": "^6.21.0"
   }
 }
