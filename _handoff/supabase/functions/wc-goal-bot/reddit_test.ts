@@ -13,3 +13,27 @@ Deno.test("deriveHostId: strips query and hash", () => {
 Deno.test("deriveHostId: no id-like segment returns null", () => {
   assertEquals(deriveHostId("https://example.com/a/b"), null);
 });
+
+import { extractClipLinks } from "./reddit.ts";
+
+Deno.test("extractClipLinks: finds a streamin link", () => {
+  const r = extractClipLinks("GOAL Ronaldo! https://streamin.link/v/aB3dEf9k great finish");
+  assertEquals(r.length, 1);
+  assertEquals(r[0].hostId, "aB3dEf9k");
+  assertEquals(r[0].url, "https://streamin.link/v/aB3dEf9k");
+});
+Deno.test("extractClipLinks: adds https:// when missing", () => {
+  const r = extractClipLinks("mirror: streamja.com/abcdef");
+  assertEquals(r[0].url, "https://streamja.com/abcdef");
+});
+Deno.test("extractClipLinks: dedupes same host id", () => {
+  const r = extractClipLinks("https://streamin.link/v/aB3dEf9k and https://streamin.link/v/aB3dEf9k");
+  assertEquals(r.length, 1);
+});
+Deno.test("extractClipLinks: ignores non-allowlisted hosts", () => {
+  assertEquals(extractClipLinks("https://youtube.com/watch?v=zzzzzz https://example.com/x").length, 0);
+});
+Deno.test("extractClipLinks: multiple distinct hosts", () => {
+  const r = extractClipLinks("https://streamin.link/v/aaaaaa1 https://dubz.link/v/bbbbbb2");
+  assertEquals(r.length, 2);
+});
