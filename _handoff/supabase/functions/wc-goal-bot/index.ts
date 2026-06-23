@@ -634,15 +634,38 @@ Deno.serve(async (req) => {
         const cap = `🎬 Highlights: ${mr.data!.away} at ${mr.data!.home}\n${r.url}`;
         if (await sendText(cap, true)) { await sb.from("match_reels").update({ status: "embed_sent" }).eq("match_id", r.match_id); out.embedsSent++; }
       }
-      // fallback: backfill matches that have no usable stitched reel (noclips / failed render) with a
-      // US-available YouTube embed if one exists — also recovers future stitch failures. Throttled.
-      const fb = await sb.from("match_reels").select("match_id").in("status", ["noclips", "error"]).limit(8);
-      for (const row of (fb.data || [])) {
-        const mm = await sb.from("matches").select("home,away,kickoff").eq("match_id", row.match_id).maybeSingle();
-        if (!mm.data) continue;
-        const src = await reelSources(row.match_id, mm.data.home, mm.data.away, String(mm.data.kickoff).slice(0, 10));
-        if (src.youtube) { await sb.from("match_reels").update({ status: "embed", url: src.youtube }).eq("match_id", row.match_id); out.embeds++; }
-        else { await sb.from("match_reels").update({ status: "nohl" }).eq("match_id", row.match_id); } // terminal: no US-available source, stop re-checking
+      // BACKFILL (board-only, never notifies): upgrade past matches that lack a downloaded MP4 reel
+      // to the best obtainable reel. Throttled, oldest-first, capped attempts so dead matches stop.
+      const BACKFILL_N = 2, BACKFILL_MAX_ATTEMPTS = 3;
+      const bf = await sb.from("match_reels")
+        .select("match_id,attempts")
+        .in("status", ["embed", "noclips", "error"])
+        .lt("attempts", BACKFILL_MAX_ATTEMPTS)
+        .limit(40);
+      const bfMatches: any[] = [];
+      for (const row of (bf.data || [])) {
+        const mm = await sb.from("matches").select("match_id,home,away,kickoff").eq("match_id", row.match_id).maybeSingle();
+        if (mm.data) bfMatches.push({ ...mm.data, attempts: row.attempts ?? 0 });
+      }
+      bfMatches.sort((a, b) => new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime());
+      let bfDone = 0;
+      for (const m of bfMatches) {
+        if (bfDone >= BACKFILL_N) break;
+        bfDone++;
+        const pick = await pickBestReel(m);
+        if (pick.type === "global" || pick.type === "geo" || pick.type === "stitch") {
+          if (await triggerReel(m.match_id, pick)) {
+            await sb.from("match_reels").update({ status: "rendering", attempts: (m.attempts ?? 0) + 1 }).eq("match_id", m.match_id);
+            (out as any).backfilled = ((out as any).backfilled || 0) + 1;
+            (out as any).reelType = pick.type;
+          } else {
+            await sb.from("match_reels").update({ attempts: (m.attempts ?? 0) + 1 }).eq("match_id", m.match_id);
+          }
+        } else if (pick.type === "embed") {
+          await sb.from("match_reels").update({ status: "embed", url: pick.url, attempts: (m.attempts ?? 0) + 1 }).eq("match_id", m.match_id);
+        } else {
+          await sb.from("match_reels").update({ attempts: (m.attempts ?? 0) + 1 }).eq("match_id", m.match_id);
+        }
       }
     }
 
