@@ -25,6 +25,7 @@ Deno.test("extractClipLinks: finds a streamin link", () => {
 Deno.test("extractClipLinks: adds https:// when missing", () => {
   const r = extractClipLinks("mirror: streamja.com/abcdef");
   assertEquals(r[0].url, "https://streamja.com/abcdef");
+  assertEquals(r[0].hostId, "abcdef");
 });
 Deno.test("extractClipLinks: dedupes same host id", () => {
   const r = extractClipLinks("https://streamin.link/v/aB3dEf9k and https://streamin.link/v/aB3dEf9k");
@@ -98,4 +99,20 @@ Deno.test("parseThreadFromSearch: excludes hyphenated Pre-Match Thread", () => {
     { data: { id: "pre1", title: "Pre-Match Thread: Brazil vs Spain" } },
   ] } };
   assertEquals(parseThreadFromSearch(j, "Brazil", "Spain"), null);
+});
+
+Deno.test("parseThreadFromSearch: token match is word-boundary safe", () => {
+  const j = { data: { children: [
+    { data: { id: "bad1", title: "Match Thread: Romania vs Germany" } },
+  ] } };
+  // 'Oman' token 'oman' is a substring of 'romania' — must NOT match
+  assertEquals(parseThreadFromSearch(j, "Oman", "Germany"), null);
+});
+
+Deno.test("parseClipsFromComments: descr skips a leading bare URL line", () => {
+  const j = [ { data: { children: [] } }, { data: { children: [
+    { data: { body: "https://streamin.link/v/ccccccc\nGoal by Messi" } },
+  ] } } ];
+  const r = parseClipsFromComments(j);
+  assertEquals(r[0].descr, "Goal by Messi");
 });

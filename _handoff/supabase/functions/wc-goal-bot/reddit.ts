@@ -13,6 +13,7 @@ export function deriveHostId(url: string): string | null {
 
 // Known fan-clip video hosts seen in r/soccer match threads. The Netlify resolver
 // already turns these pages into mp4s (or falls back to the ad link).
+/** Global regex — reset lastIndex before manual use, or prefer extractClipLinks(). */
 export const CLIP_HOST_RE =
   /((?:https?:\/\/)?(?:www\.)?(?:streamin\.[a-z]+|streamain\.[a-z]+|streamff\.[a-z]+|streamja\.com|dubz\.(?:link|co)|streamable\.com|streamwo\.[a-z]+|streamvi\.[a-z]+)\/[^\s)\]>"']+)/gi;
 
@@ -32,7 +33,7 @@ export function extractClipLinks(text: string): { url: string; hostId: string }[
 }
 
 const rnorm = (s: string) =>
-  (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036F]/g, "");
 // longest alphabetic token in a team name (e.g. "DR Congo" -> "congo")
 const longestTok = (s: string) =>
   rnorm(s).split(/[^a-z]+/).filter((w) => w.length >= 3).sort((a, b) => b.length - a.length)[0] || rnorm(s);
@@ -44,9 +45,9 @@ export function parseThreadFromSearch(
   const kids = json?.data?.children || [];
   for (const k of kids) {
     const title = String(k?.data?.title || "");
-    const t = rnorm(title).replace(/[^a-z0-9]+/g, " "); // collapse hyphens/punct so "Post-Match" == "post match"
-    if (t.includes("match thread") && !t.includes("post match") && !t.includes("pre match")
-        && t.includes(h) && t.includes(a)) {
+    const t = " " + rnorm(title).replace(/[^a-z0-9]+/g, " ").trim() + " "; // collapse hyphens/punct so "Post-Match" == "post match"
+    if (t.includes(" match thread ") && !t.includes(" post match ") && !t.includes(" pre match ")
+        && t.includes(" " + h + " ") && t.includes(" " + a + " ")) {
       return { id: String(k.data.id), title };
     }
   }
@@ -62,7 +63,8 @@ export function parseClipsFromComments(
   const kids = listing?.data?.children || [];
   for (const k of kids) {
     const body = String(k?.data?.body || "");
-    const firstLine = body.split("\n").map((s) => s.trim()).find(Boolean) || "";
+    const firstLine = body.split("\n").map((s) => s.trim())
+      .find((s) => s && !/^https?:\/\//i.test(s)) || "";
     for (const { url, hostId } of extractClipLinks(body)) {
       if (!seen.has(hostId)) { seen.add(hostId); out.push({ url, hostId, descr: firstLine.slice(0, 200) }); }
     }
