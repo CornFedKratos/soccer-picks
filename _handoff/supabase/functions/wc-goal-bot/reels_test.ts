@@ -23,3 +23,17 @@ Deno.test("isFullReel: reaction excluded", () => {
 Deno.test("isFullReel: needs a reel word", () => {
   assertEquals(isFullReel("Norway 🆚 Senegal #FIFAWorldCupOnYT"), false);
 });
+
+import { channelCountry } from "./reels.ts";
+
+Deno.test("channelCountry: known geo channels", () => {
+  assertEquals(channelCountry("ITV Sport"), "gb");
+  assertEquals(channelCountry("DAZN ES"), "es");
+  assertEquals(channelCountry("DAZN Italia"), "it");
+  assertEquals(channelCountry("beIN SPORTS France"), "fr");
+});
+Deno.test("channelCountry: unknown/US channel returns null", () => {
+  assertEquals(channelCountry("ESPN FC"), null);
+  assertEquals(channelCountry("FIFA"), null);
+  assertEquals(channelCountry(""), null);
+});
