@@ -85,3 +85,17 @@ Deno.test("parseClipsFromComments: empty/garbage returns []", () => {
   assertEquals(parseClipsFromComments(null).length, 0);
   assertEquals(parseClipsFromComments([{}, {}]).length, 0);
 });
+
+Deno.test("parseThreadFromSearch: excludes hyphenated Post-Match Thread", () => {
+  const j = { data: { children: [
+    { data: { id: "pm1", title: "Post-Match Thread: Portugal 3-0 Uzbekistan" } },
+    { data: { id: "mt1", title: "Match Thread: Portugal vs Uzbekistan" } },
+  ] } };
+  assertEquals(parseThreadFromSearch(j, "Portugal", "Uzbekistan")?.id, "mt1");
+});
+Deno.test("parseThreadFromSearch: excludes hyphenated Pre-Match Thread", () => {
+  const j = { data: { children: [
+    { data: { id: "pre1", title: "Pre-Match Thread: Brazil vs Spain" } },
+  ] } };
+  assertEquals(parseThreadFromSearch(j, "Brazil", "Spain"), null);
+});

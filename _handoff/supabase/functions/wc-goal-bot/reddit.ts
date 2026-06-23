@@ -44,7 +44,7 @@ export function parseThreadFromSearch(
   const kids = json?.data?.children || [];
   for (const k of kids) {
     const title = String(k?.data?.title || "");
-    const t = rnorm(title);
+    const t = rnorm(title).replace(/[^a-z0-9]+/g, " "); // collapse hyphens/punct so "Post-Match" == "post match"
     if (t.includes("match thread") && !t.includes("post match") && !t.includes("pre match")
         && t.includes(h) && t.includes(a)) {
       return { id: String(k.data.id), title };
