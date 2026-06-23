@@ -61,3 +61,27 @@ Deno.test("parseThreadFromSearch: token match handles name ordering", () => {
 Deno.test("parseThreadFromSearch: no match returns null", () => {
   assertEquals(parseThreadFromSearch(searchJson, "Brazil", "Spain"), null);
 });
+
+import { parseClipsFromComments } from "./reddit.ts";
+
+const commentsJson = [
+  { data: { children: [] } }, // [0] = the post (t3)
+  { data: { children: [      // [1] = comments (t1)
+    { data: { body: "GOAL! Ronaldo 1-0\nhttps://streamin.link/v/aaaaaa1" } },
+    { data: { body: "no link here, just chat" } },
+    { data: { body: "mirror https://dubz.link/v/bbbbbb2" } },
+    { data: { body: "repost https://streamin.link/v/aaaaaa1" } },
+  ] } },
+];
+
+Deno.test("parseClipsFromComments: extracts deduped clips with captions", () => {
+  const r = parseClipsFromComments(commentsJson);
+  assertEquals(r.length, 2);
+  assertEquals(r[0].hostId, "aaaaaa1");
+  assertEquals(r[0].descr, "GOAL! Ronaldo 1-0");
+  assertEquals(r[1].hostId, "bbbbbb2");
+});
+Deno.test("parseClipsFromComments: empty/garbage returns []", () => {
+  assertEquals(parseClipsFromComments(null).length, 0);
+  assertEquals(parseClipsFromComments([{}, {}]).length, 0);
+});

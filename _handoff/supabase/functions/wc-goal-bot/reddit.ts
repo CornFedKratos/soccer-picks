@@ -52,3 +52,20 @@ export function parseThreadFromSearch(
   }
   return null;
 }
+
+export function parseClipsFromComments(
+  json: any,
+): { url: string; hostId: string; descr: string }[] {
+  const out: { url: string; hostId: string; descr: string }[] = [];
+  const seen = new Set<string>();
+  const listing = Array.isArray(json) ? json[1] : json; // [t3 post, t1 comments]
+  const kids = listing?.data?.children || [];
+  for (const k of kids) {
+    const body = String(k?.data?.body || "");
+    const firstLine = body.split("\n").map((s) => s.trim()).find(Boolean) || "";
+    for (const { url, hostId } of extractClipLinks(body)) {
+      if (!seen.has(hostId)) { seen.add(hostId); out.push({ url, hostId, descr: firstLine.slice(0, 200) }); }
+    }
+  }
+  return out;
+}
