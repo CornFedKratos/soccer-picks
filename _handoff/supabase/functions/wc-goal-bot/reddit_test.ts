@@ -1,5 +1,5 @@
-import { assertEquals } from "jsr:@std/assert@1";
-import { deriveHostId } from "./reddit.ts";
+import { assert, assertEquals } from "jsr:@std/assert@1";
+import { deriveHostId, extractClipLinks, parseGoalPostsFromFeed, teamMatchesTitle } from "./reddit.ts";
 
 Deno.test("deriveHostId: streamin.link/v/<id>", () => {
   assertEquals(deriveHostId("https://streamin.link/v/aB3dEf9k"), "aB3dEf9k");
@@ -13,8 +13,6 @@ Deno.test("deriveHostId: strips query and hash", () => {
 Deno.test("deriveHostId: no id-like segment returns null", () => {
   assertEquals(deriveHostId("https://example.com/a/b"), null);
 });
-
-import { extractClipLinks } from "./reddit.ts";
 
 Deno.test("extractClipLinks: finds a streamin link", () => {
   const r = extractClipLinks("GOAL Ronaldo! https://streamin.link/v/aB3dEf9k great finish");
@@ -39,80 +37,36 @@ Deno.test("extractClipLinks: multiple distinct hosts", () => {
   assertEquals(r.length, 2);
 });
 
-import { parseThreadFromSearch } from "./reddit.ts";
+const feed = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+<entry><title>Portugal [5] - 0 Uzbekistan - Rafael Le&#227;o 87&#39;</title>
+<content type="html">&lt;a href="https://streamff.live/v/abc123"&gt;[link]&lt;/a&gt;</content></entry>
+<entry><title>Some news post</title><content type="html">&lt;a href="https://example.com/x"&gt;[link]&lt;/a&gt;</content></entry>
+<entry><title>Norway [1] - 0 Senegal - Haaland 58&#39;</title>
+<content type="html">&lt;a href="https://streamin.link/v/zzz999"&gt;[link]&lt;/a&gt;</content></entry>
+</feed>`;
 
-const searchJson = {
-  data: { children: [
-    { data: { id: "zz111", title: "Post Match Thread: Portugal 3-0 Uzbekistan" } },
-    { data: { id: "ab222", title: "Match Thread: Portugal vs Uzbekistan | FIFA World Cup" } },
-    { data: { id: "cd333", title: "Match Thread: France vs Iraq" } },
-  ] },
-};
-
-Deno.test("parseThreadFromSearch: matches by team tokens, ignores post-match", () => {
-  const r = parseThreadFromSearch(searchJson, "Portugal", "Uzbekistan");
-  assertEquals(r?.id, "ab222");
-});
-Deno.test("parseThreadFromSearch: token match handles name ordering", () => {
-  const j = { data: { children: [
-    { data: { id: "ee444", title: "Match Thread: Portugal vs DR Congo" } },
-  ] } };
-  assertEquals(parseThreadFromSearch(j, "Congo DR", "Portugal")?.id, "ee444");
-});
-Deno.test("parseThreadFromSearch: no match returns null", () => {
-  assertEquals(parseThreadFromSearch(searchJson, "Brazil", "Spain"), null);
-});
-
-import { parseClipsFromComments } from "./reddit.ts";
-
-const commentsJson = [
-  { data: { children: [] } }, // [0] = the post (t3)
-  { data: { children: [      // [1] = comments (t1)
-    { data: { body: "GOAL! Ronaldo 1-0\nhttps://streamin.link/v/aaaaaa1" } },
-    { data: { body: "no link here, just chat" } },
-    { data: { body: "mirror https://dubz.link/v/bbbbbb2" } },
-    { data: { body: "repost https://streamin.link/v/aaaaaa1" } },
-  ] } },
-];
-
-Deno.test("parseClipsFromComments: extracts deduped clips with captions", () => {
-  const r = parseClipsFromComments(commentsJson);
+Deno.test("parseGoalPostsFromFeed: returns only clip-host posts, deduped", () => {
+  const r = parseGoalPostsFromFeed(feed);
   assertEquals(r.length, 2);
-  assertEquals(r[0].hostId, "aaaaaa1");
-  assertEquals(r[0].descr, "GOAL! Ronaldo 1-0");
-  assertEquals(r[1].hostId, "bbbbbb2");
+  assertEquals(r[0].hostId, "abc123");
+  assertEquals(r[0].url, "https://streamff.live/v/abc123");
+  assert(r[0].title.includes("Rafael"));
+  assertEquals(r[1].hostId, "zzz999");
 });
-Deno.test("parseClipsFromComments: empty/garbage returns []", () => {
-  assertEquals(parseClipsFromComments(null).length, 0);
-  assertEquals(parseClipsFromComments([{}, {}]).length, 0);
-});
-
-Deno.test("parseThreadFromSearch: excludes hyphenated Post-Match Thread", () => {
-  const j = { data: { children: [
-    { data: { id: "pm1", title: "Post-Match Thread: Portugal 3-0 Uzbekistan" } },
-    { data: { id: "mt1", title: "Match Thread: Portugal vs Uzbekistan" } },
-  ] } };
-  assertEquals(parseThreadFromSearch(j, "Portugal", "Uzbekistan")?.id, "mt1");
-});
-Deno.test("parseThreadFromSearch: excludes hyphenated Pre-Match Thread", () => {
-  const j = { data: { children: [
-    { data: { id: "pre1", title: "Pre-Match Thread: Brazil vs Spain" } },
-  ] } };
-  assertEquals(parseThreadFromSearch(j, "Brazil", "Spain"), null);
+Deno.test("parseGoalPostsFromFeed: empty/garbage returns []", () => {
+  assertEquals(parseGoalPostsFromFeed("").length, 0);
+  assertEquals(parseGoalPostsFromFeed("<feed></feed>").length, 0);
 });
 
-Deno.test("parseThreadFromSearch: token match is word-boundary safe", () => {
-  const j = { data: { children: [
-    { data: { id: "bad1", title: "Match Thread: Romania vs Germany" } },
-  ] } };
-  // 'Oman' token 'oman' is a substring of 'romania' — must NOT match
-  assertEquals(parseThreadFromSearch(j, "Oman", "Germany"), null);
+Deno.test("teamMatchesTitle: matches both teams present", () => {
+  assert(teamMatchesTitle("Portugal [5] - 0 Uzbekistan - Rafael Leao 87'", "Portugal", "Uzbekistan"));
 });
-
-Deno.test("parseClipsFromComments: descr skips a leading bare URL line", () => {
-  const j = [ { data: { children: [] } }, { data: { children: [
-    { data: { body: "https://streamin.link/v/ccccccc\nGoal by Messi" } },
-  ] } } ];
-  const r = parseClipsFromComments(j);
-  assertEquals(r[0].descr, "Goal by Messi");
+Deno.test("teamMatchesTitle: handles name ordering (DR Congo)", () => {
+  assert(teamMatchesTitle("Portugal [1] - 0 DR Congo - Neves 23'", "Congo DR", "Portugal"));
+});
+Deno.test("teamMatchesTitle: rejects a different match", () => {
+  assertEquals(teamMatchesTitle("Portugal [5] - 0 Uzbekistan", "Brazil", "Spain"), false);
+});
+Deno.test("teamMatchesTitle: word-boundary safe (oman not in romania)", () => {
+  assertEquals(teamMatchesTitle("Romania [1] - 0 Germany", "Oman", "Germany"), false);
 });

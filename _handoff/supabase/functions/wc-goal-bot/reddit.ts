@@ -33,41 +33,38 @@ export function extractClipLinks(text: string): { url: string; hostId: string }[
 }
 
 const rnorm = (s: string) =>
-  (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036F]/g, "");
+  (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 // longest alphabetic token in a team name (e.g. "DR Congo" -> "congo")
 const longestTok = (s: string) =>
   rnorm(s).split(/[^a-z]+/).filter((w) => w.length >= 3).sort((a, b) => b.length - a.length)[0] || rnorm(s);
 
-export function parseThreadFromSearch(
-  json: any, home: string, away: string,
-): { id: string; title: string } | null {
-  const h = longestTok(home), a = longestTok(away);
-  const kids = json?.data?.children || [];
-  for (const k of kids) {
-    const title = String(k?.data?.title || "");
-    const t = " " + rnorm(title).replace(/[^a-z0-9]+/g, " ").trim() + " "; // collapse hyphens/punct so "Post-Match" == "post match"
-    if (t.includes(" match thread ") && !t.includes(" post match ") && !t.includes(" pre match ")
-        && t.includes(" " + h + " ") && t.includes(" " + a + " ")) {
-      return { id: String(k.data.id), title };
-    }
-  }
-  return null;
-}
-
-export function parseClipsFromComments(
-  json: any,
-): { url: string; hostId: string; descr: string }[] {
-  const out: { url: string; hostId: string; descr: string }[] = [];
+// Parse r/soccer's Atom submissions feed into clip-host posts. Goal posts are titled
+// "Team [score] - score Team - Scorer min'" and their <content> HTML links to a clip host.
+export function parseGoalPostsFromFeed(xml: string): { title: string; url: string; hostId: string }[] {
+  const out: { title: string; url: string; hostId: string }[] = [];
   const seen = new Set<string>();
-  const listing = Array.isArray(json) ? json[1] : json; // [t3 post, t1 comments]
-  const kids = listing?.data?.children || [];
-  for (const k of kids) {
-    const body = String(k?.data?.body || "");
-    const firstLine = body.split("\n").map((s) => s.trim())
-      .find((s) => s && !/^https?:\/\//i.test(s)) || "";
-    for (const { url, hostId } of extractClipLinks(body)) {
-      if (!seen.has(hostId)) { seen.add(hostId); out.push({ url, hostId, descr: firstLine.slice(0, 200) }); }
+  const unesc = (s: string) =>
+    s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+     .replace(/&#39;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+     .replace(/&amp;/g, "&");
+  const entries = String(xml || "").split(/<entry[\s>]/i).slice(1);
+  for (const e of entries) {
+    const tm = e.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const title = unesc(tm ? tm[1].trim() : "");
+    const cm = e.match(/<content[^>]*>([\s\S]*?)<\/content>/i);
+    const content = unesc(cm ? cm[1] : "");
+    const links = extractClipLinks(content);
+    if (links.length && !seen.has(links[0].hostId)) {
+      seen.add(links[0].hostId);
+      out.push({ title, url: links[0].url, hostId: links[0].hostId });
     }
   }
   return out;
+}
+
+// True if a post title references BOTH teams (longest token of each), word-boundary safe.
+export function teamMatchesTitle(title: string, home: string, away: string): boolean {
+  const t = " " + rnorm(title).replace(/[^a-z0-9]+/g, " ").trim() + " ";
+  const h = longestTok(home), a = longestTok(away);
+  return t.includes(" " + h + " ") && t.includes(" " + a + " ");
 }
