@@ -3,7 +3,7 @@
 // Hardening: TEST MODE routes every send to the operator only; clips/reels are only marked
 // delivered after a confirmed ok send (otherwise they retry).
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { deriveHostId } from "./reddit.ts";
+import { deriveHostId, parseGoalPostsFromFeed, teamMatchesTitle } from "./reddit.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SB_SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -16,6 +16,7 @@ const HL_KEY  = Deno.env.get("HIGHLIGHTLY_KEY")  || await getVault("highlightly_
 const TG_CHAT = Deno.env.get("TELEGRAM_CHAT_ID") ?? "";
 const REEL_FN = "https://soccer-picks.netlify.app/.netlify/functions/match-reel-background";
 const REEL_DELAY_MIN = 10;
+const RESI_PROXY = Deno.env.get("RESI_PROXY_URL") || await getVault("resi_proxy_url");
 
 const ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard";
 const SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=";
@@ -178,6 +179,20 @@ async function reelSources(match_id: string, home: string, away: string, ymd?: s
     streamff.sort((a, b) => a.min - b.min);
     return { streamff, youtube };
   } catch (_) { return empty; }
+}
+
+// Pull goal-clip posts from r/soccer's public submissions RSS (no OAuth) via the residential
+// proxy — datacenter IPs get 403/429 hitting Reddit directly. Fail-safe: returns [] on ANY error
+// (incl. runtimes without Deno.createHttpClient), so a Reddit/proxy problem never breaks the tick.
+async function redditClipPosts(): Promise<{ title: string; url: string; hostId: string }[]> {
+  if (!RESI_PROXY) return [];
+  try {
+    const client = (Deno as any).createHttpClient({ proxy: { url: RESI_PROXY } });
+    const r = await fetch("https://www.reddit.com/r/soccer/new/.rss?limit=50",
+      { client, headers: { "user-agent": "soccer-picks/1.0 (clip discovery)" } } as any);
+    if (!r.ok) return [];
+    return parseGoalPostsFromFeed(await r.text());
+  } catch (_) { return []; }
 }
 
 // Kick off ffmpeg compression of one streamff clip via the Netlify function -> reels/clips/<m>_<clipId>.mp4.
@@ -363,12 +378,19 @@ Deno.serve(async (req) => {
     // highlight clips RELAY: send EVERY Highlightly clip (goals, misses, saves, cards) with its own
     // context sentence + our narration (goal label + assist when it matches a detected goal).
     // 1) discover clips for live / recently-finished matches and queue them (deduped by streamff id)
-    if (!firstRun && HL_KEY) {
+    if (!firstRun) {
       const liveish = matchRows.filter((m) => (m.state === "in" || m.state === "post") && (Date.now() - new Date(m.kickoff).getTime()) <= 4 * 3600 * 1000);
+      const redditPosts = liveish.length ? await redditClipPosts() : [];
       for (const m of liveish) {
         const src = await reelSources(m.match_id, m.home, m.away, String(m.kickoff).slice(0, 10));
         for (const c of src.streamff) {
           await sb.from("clips").upsert({ clip_id: c.id, match_id: m.match_id, descr: c.label, src_url: c.url }, { onConflict: "clip_id", ignoreDuplicates: true });
+        }
+        // Reddit goal-clip posts (RSS) that name BOTH of this match's teams
+        for (const p of redditPosts) {
+          if (teamMatchesTitle(p.title, m.home, m.away)) {
+            await sb.from("clips").upsert({ clip_id: p.hostId, match_id: m.match_id, descr: p.title, src_url: p.url }, { onConflict: "clip_id", ignoreDuplicates: true });
+          }
         }
       }
     }
