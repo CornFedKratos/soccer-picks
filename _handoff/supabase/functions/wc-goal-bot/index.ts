@@ -184,16 +184,18 @@ async function reelSources(match_id: string, home: string, away: string, ymd?: s
 // Pull goal-clip posts from r/soccer's public submissions RSS (no OAuth) via the residential
 // proxy — datacenter IPs get 403/429 hitting Reddit directly. Fail-safe: returns [] on ANY error
 // (incl. runtimes without Deno.createHttpClient), so a Reddit/proxy problem never breaks the tick.
+let redditDiag = "init";
 async function redditClipPosts(): Promise<{ title: string; url: string; hostId: string }[]> {
-  if (!RESI_PROXY) { console.log("[reddit] no RESI_PROXY"); return []; }
+  if (!RESI_PROXY) { redditDiag = "no-proxy"; return []; }
   try {
     const client = (Deno as any).createHttpClient({ proxy: { url: RESI_PROXY } });
     const r = await fetch("https://www.reddit.com/r/soccer/new/.rss?limit=50",
       { client, headers: { "user-agent": "soccer-picks/1.0 (clip discovery)" } } as any);
-    const posts = r.ok ? parseGoalPostsFromFeed(await r.text()) : [];
-    console.log("[reddit] rss status", r.status, "clip-posts", posts.length);
+    const xml = r.ok ? await r.text() : "";
+    const posts = r.ok ? parseGoalPostsFromFeed(xml) : [];
+    redditDiag = `status=${r.status} bytes=${xml.length} posts=${posts.length}`;
     return posts;
-  } catch (e) { console.log("[reddit] ERR", String(e).slice(0, 160)); return []; }
+  } catch (e) { redditDiag = "ERR " + String(e).slice(0, 140); return []; }
 }
 
 // Kick off ffmpeg compression of one streamff clip via the Netlify function -> reels/clips/<m>_<clipId>.mp4.
@@ -383,6 +385,7 @@ Deno.serve(async (req) => {
       const liveish = matchRows.filter((m) => (m.state === "in" || m.state === "post") && (Date.now() - new Date(m.kickoff).getTime()) <= 4 * 3600 * 1000);
       const redditPosts = liveish.length ? await redditClipPosts() : [];
       (out as any).redditPosts = redditPosts.length;
+      (out as any).redditDiag = redditDiag;
       for (const m of liveish) {
         const src = await reelSources(m.match_id, m.home, m.away, String(m.kickoff).slice(0, 10));
         for (const c of src.streamff) {
