@@ -37,3 +37,20 @@ Deno.test("channelCountry: unknown/US channel returns null", () => {
   assertEquals(channelCountry("FIFA"), null);
   assertEquals(channelCountry(""), null);
 });
+
+Deno.test("channelCountry: tnt sports maps to br (not shadowed by 't sports')", () => {
+  assertEquals(channelCountry("TNT Sports"), "br");
+  assertEquals(channelCountry("TNT Sports Brasil"), "br");
+});
+Deno.test("channelCountry: DAZN DE", () => {
+  assertEquals(channelCountry("DAZN DE"), "de");
+});
+Deno.test("isFullReel: 'press' inside a word is not excluded", () => {
+  assert(isFullReel("Impressive Goals | USA 4-1 Paraguay Highlights"));
+});
+Deno.test("isFullReel: Spanish resumen reel", () => {
+  assert(isFullReel("Resumen | España 3-0 Marruecos"));
+});
+Deno.test("isFullReel: shorts without # still excluded", () => {
+  assertEquals(isFullReel("Shorts: Top Highlights"), false);
+});

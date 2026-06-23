@@ -5,7 +5,7 @@
 export function isFullReel(title: string): boolean {
   const t = (title || "").toLowerCase();
   if (!/highlights|resumen|résumé|resume|resumo/.test(t)) return false;
-  if (/\bgoal\b|interview|press|conference|reaction|preview|pre-?match|training|\btrain\b|#?shorts\b|gamified|alt cast|anthem/.test(t)) return false;
+  if (/\bgoal\b|interview|\bpress\b|\bconference\b|reaction|\bpreview\b|pre-?match|training|\btrain\b|#?shorts\b|gamified|alt cast|anthem/.test(t)) return false;
   return true;
 }
 
@@ -13,8 +13,8 @@ export function isFullReel(title: string): boolean {
 const CHANNEL_COUNTRY: Array<[string, string]> = [
   ["itv", "gb"], ["dazn es", "es"], ["dazn espana", "es"], ["dazn italia", "it"],
   ["bein sports france", "fr"], ["bein france", "fr"], ["dazn de", "de"],
-  ["sportdigital", "de"], ["viaplay", "se"], ["supersport", "za"], ["t sports", "bd"],
-  ["arena sport", "rs"], ["tnt sports", "br"], ["optus", "au"],
+  ["sportdigital", "de"], ["viaplay", "se"], ["supersport", "za"],
+  ["arena sport", "rs"], ["tnt sports", "br"], ["t sports", "bd"], ["optus", "au"],
 ];
 export function channelCountry(channel: string): string | null {
   const c = (channel || "").toLowerCase();
