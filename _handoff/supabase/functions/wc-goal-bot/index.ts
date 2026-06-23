@@ -17,6 +17,7 @@ const TG_CHAT = Deno.env.get("TELEGRAM_CHAT_ID") ?? "";
 const REEL_FN = "https://soccer-picks.netlify.app/.netlify/functions/match-reel-background";
 const REEL_DELAY_MIN = 10;
 const RESI_PROXY = Deno.env.get("RESI_PROXY_URL") || await getVault("resi_proxy_url");
+const RESI_PROXIES = (Deno.env.get("RESI_PROXY_URLS") || "").split(",").map((s) => s.trim()).filter(Boolean);
 
 const ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard";
 const SUMMARY = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=";
@@ -188,26 +189,29 @@ let redditDiag = "init";
 const RDT_URL = "https://www.reddit.com/r/soccer/new/.rss?limit=50";
 const RDT_UA = { "user-agent": "soccer-picks/1.0 (clip discovery)" };
 async function redditClipPosts(): Promise<{ title: string; url: string; hostId: string }[]> {
-  // 1) try direct from Supabase's own IP — RSS may not be datacenter-blocked like the .json API is
-  try {
-    const rd = await fetch(RDT_URL, { headers: RDT_UA });
-    if (rd.ok) {
-      const xml = await rd.text(); const posts = parseGoalPostsFromFeed(xml);
-      redditDiag = `direct ${rd.status} bytes=${xml.length} posts=${posts.length}`;
-      return posts;
-    }
-    redditDiag = `direct ${rd.status}`;
-  } catch (e) { redditDiag = "direct ERR " + String(e).slice(0, 70); }
-  // 2) fallback: residential proxy
-  if (!RESI_PROXY) return [];
-  try {
-    const client = (Deno as any).createHttpClient({ proxy: { url: RESI_PROXY } });
-    const r = await fetch(RDT_URL, { client, headers: RDT_UA } as any);
-    const xml = r.ok ? await r.text() : "";
-    const posts = r.ok ? parseGoalPostsFromFeed(xml) : [];
-    redditDiag += ` | proxy ${r.status} bytes=${xml.length} posts=${posts.length}`;
-    return posts;
-  } catch (e) { redditDiag += " | proxy ERR " + String(e).slice(0, 70); return []; }
+  // Reddit blocks datacenter IPs (403) and rate-limits hot shared proxy IPs (429), so rotate across
+  // the proxy pool: start at a per-minute offset, try up to 5, skip throttled/failed exit IPs.
+  const proxies = RESI_PROXIES.length ? RESI_PROXIES : (RESI_PROXY ? [RESI_PROXY] : []);
+  if (!proxies.length) { redditDiag = "no-proxy"; return []; }
+  const start = Math.floor(Date.now() / 60000) % proxies.length;
+  const tries = Math.min(proxies.length, 5);
+  let last = "";
+  for (let i = 0; i < tries; i++) {
+    const idx = (start + i) % proxies.length;
+    try {
+      const client = (Deno as any).createHttpClient({ proxy: { url: proxies[idx] } });
+      const r = await fetch(RDT_URL, { client, headers: RDT_UA } as any);
+      if (r.ok) {
+        const xml = await r.text();
+        const posts = parseGoalPostsFromFeed(xml);
+        redditDiag = `ok via #${idx} bytes=${xml.length} posts=${posts.length}`;
+        return posts;
+      }
+      last = `#${idx}=${r.status}`;
+    } catch (_) { last = `#${idx}=ERR`; }
+  }
+  redditDiag = `all ${tries} failed (${last})`;
+  return [];
 }
 
 // Kick off ffmpeg compression of one streamff clip via the Netlify function -> reels/clips/<m>_<clipId>.mp4.
