@@ -106,7 +106,7 @@ async function hlMatchId(match_id: string, home: string, away: string, ymd?: str
   const base = ymd || new Date().toISOString().slice(0, 10);
   const d0 = new Date(base + "T12:00:00Z").getTime();
   const dates = [0, -1, 1].map((o) => new Date(d0 + o * 864e5).toISOString().slice(0, 10));
-  const h = norm(home), a = norm(away);
+  const h = norm(FLAG_ALIAS[home] || home), a = norm(FLAG_ALIAS[away] || away);
   mid = null;
   for (const d of dates) {
     try {
