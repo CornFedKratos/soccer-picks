@@ -639,7 +639,7 @@ Deno.serve(async (req) => {
       const BACKFILL_N = 2, BACKFILL_MAX_ATTEMPTS = 3;
       const bf = await sb.from("match_reels")
         .select("match_id,attempts")
-        .in("status", ["embed", "noclips", "error"])
+        .in("status", ["embed", "noclips", "error", "nohl"])
         .lt("attempts", BACKFILL_MAX_ATTEMPTS)
         .limit(40);
       const bfMatches: any[] = [];
