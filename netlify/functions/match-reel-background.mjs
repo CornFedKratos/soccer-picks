@@ -48,22 +48,22 @@ async function resolveMedia(input) {
   const id = idm ? idm[1] : null;
   const cand = [], tried = new Set();
   const add = (x) => { if (x && !tried.has(x)) { tried.add(x); cand.push(x); } };
-  if (id) { add(`https://cdn.streamff.one/${id}.mp4`); add(`https://cdn.streamff.com/${id}.mp4`); }
+  // streamin.top (current Highlightly host, rebranded from streamff) serves at <x>-cdn.streamin.top/uploads/<id>.mp4
+  if (id) {
+    for (const h of ["c-cdn", "b-cdn", "w-cdn"]) add(`https://${h}.streamin.top/uploads/${id}.mp4`);
+    add(`https://cdn.streamff.one/${id}.mp4`); // legacy
+  }
   try {
-    const page = String(input).replace(/streamff\.(pro|one)/i, "streamff.com");
-    const r = await fetch(page, { headers: { "user-agent": UA } });
+    const r = await fetch(String(input), { headers: { "user-agent": UA } });
     if (r.ok) {
       const html = await r.text();
       const grab = (txt) => {
-        for (const m of txt.matchAll(/https?:\\?\/\\?\/[^"'\s\\)]+\.(?:mp4|m3u8)/gi)) add(m[0].replace(/\\u002f/gi, "/").replace(/\\\//g, "/"));
-        if (id) for (const m of txt.matchAll(/https?:\/\/[a-z0-9.-]*(?:cdn|stream|video|media|b-cdn|bunnycdn|r2|cloudflarestorage)[a-z0-9.-]*/gi)) add(m[0].replace(/\/+$/, "") + "/" + id + ".mp4");
+        for (const m of txt.matchAll(/https?:\\?\/\\?\/[^"'\s\\)#]+\.(?:mp4|m3u8)/gi)) add(m[0].replace(/\\u002f/gi, "/").replace(/\\\//g, "/"));
+        if (id) for (const m of txt.matchAll(/https?:\/\/[a-z0-9.-]*(?:cdn|stream|video|media|bunnycdn|r2|cloudflarestorage)[a-z0-9.-]*/gi)) {
+          const base = m[0].replace(/\/+$/, ""); add(base + "/uploads/" + id + ".mp4"); add(base + "/" + id + ".mp4");
+        }
       };
       grab(html);
-      const chunks = [...html.matchAll(/\/_next\/static\/chunks\/[A-Za-z0-9/_.%\[\]-]+\.js/g)].map((x) => x[0]).slice(0, 10);
-      for (const ch of chunks) {
-        try { const cr = await fetch("https://streamff.com" + ch, { headers: { "user-agent": UA } }); if (cr.ok) grab(await cr.text()); } catch (_) {}
-        if (cand.length > 6) break;
-      }
     }
   } catch (_) {}
   for (const c of cand) { if (await isMedia(c)) return c; }
