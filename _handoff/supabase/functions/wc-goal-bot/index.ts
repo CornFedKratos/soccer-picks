@@ -199,9 +199,10 @@ async function reelSources(match_id: string, home: string, away: string, ymd?: s
 // global official reel (download) > geo-locked official reel (download via region proxy) >
 // stitch (>=2 downloadable clips) > US-only embed link.
 async function pickBestReel(m: any): Promise<
-  { type: "global" | "geo" | "stitch" | "embed" | "none"; url?: string; proxyUrl?: string | null; clips?: any[] }
+  { type: "global" | "ytstitch" | "stitch" | "geo" | "embed" | "none"; url?: string; proxyUrl?: string | null; clips?: any[] }
 > {
   let globalUrl: string | null = null, geo: { url: string; proxyUrl: string } | null = null, embedUrl: string | null = null;
+  const ytGoals: string[] = []; // global (US/FIFA) per-goal YouTube clips, to stitch when no global full reel
   if (HL_KEY) {
     try {
       const mid = await hlMatchId(m.match_id, m.home, m.away, String(m.kickoff).slice(0, 10));
@@ -209,38 +210,48 @@ async function pickBestReel(m: any): Promise<
       for (const c of hl) {
         if (String(c.source || "").toLowerCase() !== "youtube") continue;
         const title = String(c.title || ""), ch = String(c.channel || "").toLowerCase();
-        if (!isFullReel(title)) continue;
         const url = c.embedUrl || c.url;
         if (!url) continue;
         const blocked = YT_BLOCK.some((b) => ch.includes(b));
-        if (!blocked && YT_PREF.some((p) => ch.includes(p.toLowerCase()))) {
-          globalUrl ||= url; embedUrl ||= url;
-        } else if (blocked) {
-          const px = proxyForCountry(channelCountry(ch));
-          if (px && !geo) geo = { url, proxyUrl: px };
+        const usPref = !blocked && YT_PREF.some((p) => ch.includes(p.toLowerCase()));
+        if (isFullReel(title)) {
+          if (usPref) { globalUrl ||= url; embedUrl ||= url; }            // truly global full reel (FIFA/ESPN/...)
+          else if (blocked) { const px = proxyForCountry(channelCountry(ch)); if (px && !geo) geo = { url, proxyUrl: px }; }
+        } else if (usPref && /\bgoal\b/i.test(title)) {
+          ytGoals.push(url);                                             // global per-goal clip ("X Goal", "Own Goal")
         }
       }
     } catch (_) {}
   }
-  if (globalUrl) return { type: "global", url: globalUrl, proxyUrl: anyProxy() };
-  if (geo) return { type: "geo", url: geo.url, proxyUrl: geo.proxyUrl };
+  if (globalUrl) return { type: "global", url: globalUrl };
+  // no global full reel (common — FIFA often posts only per-goal clips): stitch the global per-goal clips
+  if (ytGoals.length >= 1) return { type: "ytstitch", clips: ytGoals.map((u) => ({ url: u })) };
   const cl = await sb.from("clips").select("src_url,descr").eq("match_id", m.match_id).limit(12);
   const clips = (cl.data || []).filter((x: any) => x.src_url);
   if (clips.length >= 2) return { type: "stitch", clips: clips.map((x: any) => ({ label: x.descr, url: x.src_url })) };
+  if (geo) return { type: "geo", url: geo.url, proxyUrl: geo.proxyUrl }; // geo full reel (datacenter rarely unlocks licensed)
   if (embedUrl) return { type: "embed", url: embedUrl };
   return { type: "none" };
 }
 
-// Kick the Netlify converter to render reels/<matchId>.mp4 from a reel result. YouTube (global/geo)
-// sends a single URL + proxy (region proxy for geo) at <=360p; stitch sends the clip list.
+// US proxies first (most US/global content is US-available), then the rest — the converter rotates
+// through these to beat YouTube's intermittent per-IP bot-check.
+function reelProxyPool(): string[] {
+  return [...(GEO_PROXIES["us"] || []), ...Object.entries(GEO_PROXIES).filter(([k]) => k !== "us").flatMap(([, v]) => v)];
+}
+
+// Kick the Netlify converter to render reels/<matchId>.mp4 from a reel result. YouTube paths
+// (global/ytstitch/geo) send a proxy POOL to rotate through at <=360p; stitch sends the file-host clips.
 async function triggerReel(matchId: string, pick: { type: string; url?: string; proxyUrl?: string | null; clips?: any[] }): Promise<boolean> {
   let token: any = null;
   try { const s = await sb.storage.from("reels").createSignedUploadUrl(`${matchId}.mp4`, { upsert: true }); token = (s as any)?.data?.token; } catch (_) {}
   if (!token) return false;
   const secret = await getVault("reel_trigger_secret");
+  const pool = reelProxyPool().length ? reelProxyPool() : RESI_PROXIES;
   const body: any = { secret, matchId, uploadToken: token };
   if (pick.type === "stitch") { body.clips = pick.clips; }
-  else { body.clips = [{ url: pick.url }]; body.proxyUrl = pick.proxyUrl || anyProxy(); body.maxHeight = 360; }
+  else if (pick.type === "ytstitch") { body.clips = pick.clips; body.proxyList = pool; body.maxHeight = 360; }
+  else { body.clips = [{ url: pick.url }]; body.proxyList = pick.proxyUrl ? [pick.proxyUrl, ...pool] : pool; body.maxHeight = 360; }
   try {
     const r = await fetch(REEL_FN, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     return r.ok || r.status === 202;
@@ -601,7 +612,7 @@ Deno.serve(async (req) => {
         if (processed >= 8) break;
         processed++;
         const pick = await pickBestReel(m);
-        if (pick.type === "global" || pick.type === "geo" || pick.type === "stitch") {
+        if (pick.type === "global" || pick.type === "ytstitch" || pick.type === "stitch" || pick.type === "geo") {
           if (await triggerReel(m.match_id, pick)) {
             await sb.from("match_reels").insert({ match_id: m.match_id, status: "rendering", attempts: 1 });
             out.reelsQueued++;
@@ -655,7 +666,7 @@ Deno.serve(async (req) => {
         if (bfDone >= BACKFILL_N) break;
         bfDone++;
         const pick = await pickBestReel(m);
-        if (pick.type === "global" || pick.type === "geo" || pick.type === "stitch") {
+        if (pick.type === "global" || pick.type === "ytstitch" || pick.type === "stitch" || pick.type === "geo") {
           if (await triggerReel(m.match_id, pick)) {
             await sb.from("match_reels").update({ status: "rendering", attempts: (m.attempts ?? 0) + 1 }).eq("match_id", m.match_id);
             (out as any).backfilled = ((out as any).backfilled || 0) + 1;

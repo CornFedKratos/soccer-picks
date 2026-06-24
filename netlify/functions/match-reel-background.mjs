@@ -124,20 +124,27 @@ async function ensureYtdlp() {
 }
 // Download a YouTube video (<=720p) through the residential proxy (defeats the datacenter bot-check)
 // to a temp mp4; returns the file path or null.
-async function downloadYouTube(url, ffmpegPath, work, idx, proxyUrl, maxH) {
+async function downloadYouTube(url, ffmpegPath, work, idx, proxyList, maxH) {
   let ytdlp; try { ytdlp = await ensureYtdlp(); } catch (e) { L("ensureYtdlp FAILED", String(e)); return null; }
   const out = join(work, `yt${idx}.mp4`);
-  const args = [url, "-f", `bv*[height<=${maxH || 720}][ext=mp4]+ba[ext=m4a]/b[height<=${maxH || 720}]/b`,
-    "--merge-output-format", "mp4", "--ffmpeg-location", ffmpegPath,
-    "--no-playlist", "--no-progress", "--no-warnings", "--no-cache-dir", "--force-ipv4",
-    "--retries", "2", "--fragment-retries", "2", "-o", out];
-  const px = proxyUrl || RESI_PROXY_URL;
-  if (px) args.push("--proxy", px);
-  L("yt-dlp spawn", url, "proxy=" + (RESI_PROXY_URL ? "yes" : "no"));
-  const res = spawnSync(ytdlp, args, { maxBuffer: 1024 * 1024 * 64, timeout: 8 * 60 * 1000, env: { ...process.env, HOME: work } });
-  L("yt-dlp exit", res.status, "spawnErr=" + (res.error ? String(res.error) : "none"),
-    "exists=" + existsSync(out), "stderrTail=" + ((res.stderr && res.stderr.toString().slice(-600)) || ""));
-  return (res.status === 0 && existsSync(out)) ? out : null;
+  // YouTube bot-checks (~"confirm you're not a bot") hit ~most datacenter proxy IPs intermittently —
+  // only a few of the pool work at any moment — so rotate through the proxies until one downloads.
+  let proxies = Array.isArray(proxyList) ? proxyList.filter(Boolean) : (proxyList ? [proxyList] : []);
+  if (!proxies.length) proxies = [RESI_PROXY_URL].filter(Boolean);
+  if (!proxies.length) proxies = [""]; // last resort: direct
+  for (let t = 0; t < Math.min(proxies.length, 6); t++) {
+    const px = proxies[t];
+    const args = [url, "-f", `bv*[height<=${maxH || 720}][ext=mp4]+ba[ext=m4a]/b[height<=${maxH || 720}]/b`,
+      "--merge-output-format", "mp4", "--ffmpeg-location", ffmpegPath,
+      "--no-playlist", "--no-progress", "--no-warnings", "--no-cache-dir", "--force-ipv4",
+      "--retries", "2", "--fragment-retries", "2", "-o", out];
+    if (px) args.push("--proxy", px);
+    const res = spawnSync(ytdlp, args, { maxBuffer: 1024 * 1024 * 64, timeout: 8 * 60 * 1000, env: { ...process.env, HOME: work } });
+    if (res.status === 0 && existsSync(out)) { L("yt-dlp OK proxy#" + t, url); return out; }
+    L("yt-dlp fail#" + t, "status", res.status, "err=" + ((res.stderr && res.stderr.toString().slice(-110)) || ""));
+    try { if (existsSync(out)) rmSync(out); } catch (_) {}
+  }
+  return null;
 }
 
 export default async (req) => {
@@ -145,7 +152,8 @@ export default async (req) => {
   try { body = await req.json(); } catch (_) {}
   if (!SECRET || body.secret !== SECRET) return new Response("unauthorized", { status: 401 });
   const { matchId, goalId, clipId, clips, uploadToken } = body;
-  const proxyUrl = typeof body.proxyUrl === "string" ? body.proxyUrl : "";
+  const proxyList = Array.isArray(body.proxyList) ? body.proxyList.filter(Boolean)
+    : (typeof body.proxyUrl === "string" && body.proxyUrl ? [body.proxyUrl] : []);
   const maxH = Number(body.maxHeight) || 720;
   const single = !!(goalId || clipId);
   const outName = body.outName || `${matchId}.mp4`;
@@ -172,7 +180,7 @@ export default async (req) => {
       L("clip", i, clips[i].url, "isYouTube=" + isYouTube(clips[i].url));
       // YouTube (official FIFA/ESPN clips): download via yt-dlp through the proxy to a temp file
       if (isYouTube(clips[i].url)) {
-        const yf = await downloadYouTube(clips[i].url, ffmpegPath, work, i, proxyUrl, maxH);
+        const yf = await downloadYouTube(clips[i].url, ffmpegPath, work, i, proxyList, maxH);
         L("downloadYouTube ->", yf ? "OK " + yf : "NULL");
         if (yf) media.push(yf);
         continue;
