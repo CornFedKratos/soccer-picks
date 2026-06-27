@@ -466,36 +466,44 @@ async function initPredictAuth(){
 }
 async function joinLeague(){
   if(!sb) return;
-  const fn=document.getElementById('suFirst'), ln=document.getElementById('suLast'), em=document.getElementById('predEmail'), cd=document.getElementById('predCode');
+  const fn=document.getElementById('suFirst'), ln=document.getElementById('suLast'), em=document.getElementById('predEmail'), cd=document.getElementById('predCode'), pn=document.getElementById('suPin');
   const first=((fn&&fn.value)||'').trim(), last=((ln&&ln.value)||'').trim();
-  const email=((em&&em.value)||'').trim().toLowerCase(), code=((cd&&cd.value)||'').trim();
+  const email=((em&&em.value)||'').trim().toLowerCase(), code=((cd&&cd.value)||'').trim(), pin=((pn&&pn.value)||'').trim();
   const st=document.getElementById('predAuthMsg');
   const bad=(el,m)=>{ if(el){el.classList.add('bad'); setTimeout(()=>el.classList.remove('bad'),1200);} if(st) st.textContent=m; };
   if(!first) return bad(fn,'Enter your first name.');
   if(!last) return bad(ln,'Enter your last name.');
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return bad(em,'Enter a valid email.');
   if(!code) return bad(cd,'Enter the league code.');
+  if(!/^\d{4}$/.test(pin)) return bad(pn,'Choose a 4-digit PIN.');
   if(st) st.textContent='Joining…';
-  let res; try{ res=await sb.rpc('wc_join',{ p_code:code, p_email:email, p_first:first, p_last:last }); }catch(e){ if(st) st.textContent='Something went wrong, try again.'; return; }
+  let res; try{ res=await sb.rpc('wc_join',{ p_code:code, p_email:email, p_first:first, p_last:last, p_pin:pin }); }catch(e){ if(st) st.textContent='Something went wrong, try again.'; return; }
   if(res&&res.error){ if(st) st.textContent='Something went wrong, try again.'; return; }
   const status=res&&res.data;
   if(status==='bad_code') return bad(cd,'That league code is not correct.');
   if(status==='bad_email') return bad(em,'Enter a valid email.');
   if(status==='bad_name') return bad(fn,'Enter your name.');
+  if(status==='bad_pin') return bad(pn,'PIN must be exactly 4 digits.');
   if(status!=='ok'){ if(st) st.textContent='Could not join, try again.'; return; }
   ME=email; MYNAME=[first,last].filter(Boolean).join(' ').slice(0,40); CODE=code; saveJoin();
   renderAuth(); await loadPredData(); startPoll(); renderPredict();
 }
 async function loginByEmail(){
   if(!sb) return;
-  const em=document.getElementById('loginEmail'); const st=document.getElementById('predAuthMsg');
-  const email=((em&&em.value)||'').trim().toLowerCase();
-  const bad=(m)=>{ if(em){em.classList.add('bad'); setTimeout(()=>em.classList.remove('bad'),1200);} if(st) st.textContent=m; };
-  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return bad('Enter a valid email.');
+  const em=document.getElementById('loginEmail'), pe=document.getElementById('loginPin'), st=document.getElementById('predAuthMsg');
+  const email=((em&&em.value)||'').trim().toLowerCase(), pin=((pe&&pe.value)||'').trim();
+  const bad=(el,m)=>{ if(el){el.classList.add('bad'); setTimeout(()=>el.classList.remove('bad'),1200);} if(st) st.textContent=m; };
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return bad(em,'Enter a valid email.');
+  if(!/^\d{4}$/.test(pin)) return bad(pe,'Enter your 4-digit PIN.');
   if(st) st.textContent='Logging in…';
-  let res; try{ res=await sb.rpc('wc_login',{ p_email:email }); }catch(e){ if(st) st.textContent='Something went wrong, try again.'; return; }
+  let res; try{ res=await sb.rpc('wc_login',{ p_email:email, p_pin:pin }); }catch(e){ if(st) st.textContent='Something went wrong, try again.'; return; }
   const d=res&&res.data;
-  if(!d || d.error){ if(d&&d.error==='not_found') return bad('No sign-up found for that email — use “Join the pool” above.'); return bad('Could not log in, try again.'); }
+  if(!d || d.error){
+    if(d&&d.error==='not_found') return bad(em,'No sign-up found for that email — use Join the pool above.');
+    if(d&&d.error==='wrong_pin') return bad(pe,'Wrong PIN. Try again, or ask Don if you forgot it.');
+    if(d&&d.error==='set_pin') return bad(pe,'First time on this device — pick a 4-digit PIN to set it.');
+    return bad(em,'Could not log in, try again.');
+  }
   ME=email; MYNAME=d.name||email.split('@')[0]; CODE=d.code; saveJoin();
   renderAuth(); await loadPredData(); startPoll(); renderPredict();
 }
@@ -563,12 +571,14 @@ function renderAuth(msg){
       +'<button class="pbtn" onclick="leaveLeague()">Leave</button></div>';
   } else {
     box.innerHTML='<div class="authcard"><div class="authh">Join the pool</div>'
-      +'<div class="authsub">Enter your name, email, and the league code your host gave you. No password, nothing to click in your inbox.</div>'
+      +'<div class="authsub">Enter your name, email, the league code your host gave you, and a 4-digit PIN you will remember. No password, nothing to click in your inbox.</div>'
       +'<div class="surow"><input id="suFirst" type="text" maxlength="24" placeholder="First name" autocomplete="given-name" /><input id="suLast" type="text" maxlength="24" placeholder="Last name" autocomplete="family-name" /></div>'
       +'<div class="surow"><input id="predEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com" /><input id="predCode" type="text" inputmode="numeric" maxlength="6" placeholder="League code" /></div>'
+      +'<div class="surow"><input id="suPin" type="text" inputmode="numeric" maxlength="4" placeholder="Choose a 4-digit PIN" autocomplete="off" /></div>'
       +'<div class="addrow"><button class="pbtn solid" style="flex:1" onclick="joinLeague()">Join the pool</button></div>'
-      +'<div style="text-align:center;color:#6b7a99;font-size:12px;font-weight:700;margin:15px 0 9px">— already signed up? just enter your email —</div>'
-      +'<div class="surow"><input id="loginEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com" /><button class="pbtn" style="white-space:nowrap" onclick="loginByEmail()">Log back in</button></div>'
+      +'<div style="text-align:center;color:#6b7a99;font-size:12px;font-weight:700;margin:15px 0 9px">— already signed up? email + your PIN —</div>'
+      +'<div class="surow"><input id="loginEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com" /><input id="loginPin" type="text" inputmode="numeric" maxlength="4" placeholder="PIN" autocomplete="off" style="max-width:84px" /></div>'
+      +'<div class="addrow"><button class="pbtn" style="flex:1" onclick="loginByEmail()">Log back in</button></div>'
       +'<div id="predAuthMsg" class="authmsg">'+(msg||'')+'</div></div>';
   }
 }
