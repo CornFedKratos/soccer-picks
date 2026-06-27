@@ -226,8 +226,8 @@ swap(
 
 swap(
   """function bracketTie(e){ return '<div class="tie">'+bslot(e.home)+'<div class="vs"></div>'+bslot(e.away)+'</div>'; }""",
-  """function bracketTie(e){ var done=e.state==='post'; var hw=done&&e.hs>e.as, aw=done&&e.as>e.hs; return '<div class="tie"><div class="mcard'+(done?' done':'')+'">'+bslot(e.home,hw)+'<div class="vs"></div>'+bslot(e.away,aw)+'</div></div>'; }
-function champWho(f){ if(!f||f.state!=='post') return ''; var w=f.hs>f.as?f.home:(f.as>f.hs?f.away:''); return (w&&KNOWN.has(norm(w)))?'<div class="who">'+norm(w)+'</div>':''; }""",
+  """function bracketTie(e){ var done=e.state==='post'; var hw=done&&(e.win?e.win==='h':e.hs>e.as), aw=done&&(e.win?e.win==='a':e.as>e.hs); return '<div class="tie"><div class="mcard'+(done?' done':'')+'">'+bslot(e.home,hw)+'<div class="vs"></div>'+bslot(e.away,aw)+'</div></div>'; }
+function champWho(f){ if(!f||f.state!=='post') return ''; var w=(f.win==='h'||(!f.win&&f.hs>f.as))?f.home:((f.win==='a'||(!f.win&&f.as>f.hs))?f.away:''); return (w&&KNOWN.has(norm(w)))?'<div class="who">'+norm(w)+'</div>':''; }""",
   "bracketTie")
 
 swap(
@@ -439,16 +439,28 @@ const SB_KEY='sb_publishable_bsmzithS3xRk2_VLdBKFKg_97YqazB6';
 const TG_BOT='SCHM1NK_SoccerPicks_Bot';
 let sb=null;
 try{ sb = window.supabase.createClient(SB_URL, SB_KEY, { db:{schema:'worldcup'}, auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } }); }catch(e){ console.warn('supabase init failed', e); }
-let ME=null, MYNAME='', CODE='', MYID='', MYPICKS={}, PLAYERS={}, PICKLIST=[], MYSUB=false, predRefreshTimer=null, TG_DISMISSED=false, PICK_FLASH={};
+let ME=null, MYNAME='', CODE='', MYID='', MYPICKS={}, MYSCORES={}, PLAYERS={}, PICKLIST=[], MYSUB=false, predRefreshTimer=null, TG_DISMISSED=false, PICK_FLASH={};
 try{ TG_DISMISSED = localStorage.getItem('wc_tg_dismissed')==='1'; }catch(e){}
 
 const outcomeOf=e=> e.hs>e.as?'h':(e.as>e.hs?'a':'d');
 function pickable(e){ return KNOWN.has(e.home)&&KNOWN.has(e.away); }
 function groupsDone(){ return !DATA.events.some(x=>!x.ko && x.state!=='post'); } // every group match finished
 function pickOpen(e){ if(e.ko && !groupsDone()) return false; return new Date(e.utc).getTime() > Date.now(); } // R32+ frozen until the group stage ends; all picks lock at kickoff
-function scorePicksMap(map){ let pts=0,correct=0,total=0; map=map||{};
-  DATA.events.forEach(e=>{ if(e.state!=='post'||!pickable(e)) return; const p=map[e.id]; if(!p) return;
-    const o=outcomeOf(e); if(e.ko&&o==='d') return; total++; if(p===o){correct++; pts+=3;} });
+// Knockout result = the team that ACTUALLY advanced (incl. penalties; from ESPN's winner flag),
+// so a 1-1 game won on PKs still credits whoever picked that team. Group stage = win/draw/loss.
+function koOut(e){ return e.ko ? (e.win||'') : outcomeOf(e); }
+function isFinalEvent(e){ return !!(e.ko && typeof koRound==='function' && koRound(e)==='F'); }
+function scorePicksMap(pmap, smap){ let pts=0,correct=0,total=0; pmap=pmap||{}; smap=smap||{};
+  const reset=groupsDone();                                           // group stage was practice — once it ends, only the knockouts count toward the $100
+  DATA.events.forEach(e=>{ if(e.state!=='post'||!pickable(e)) return;
+    if(reset && !e.ko) return;
+    const p=pmap[e.id]; if(!p) return;
+    const o=koOut(e); if(!o) return;                                  // knockout with no winner yet -> not scored
+    total++;
+    if(p===o){ correct++;
+      const exact = isFinalEvent(e) && smap[e.id] && smap[e.id]===(e.hs+'-'+e.as);  // Final: nail the score
+      pts += exact ? 5 : 3; }
+  });
   return {pts,correct,total};
 }
 
@@ -515,7 +527,7 @@ async function loadPredData(){ if(!sb||!ME||!CODE) return;
     const d=r&&r.data;
     if(!d || d.error){ if(d&&d.error==='bad_code') leaveLeague(); return; }
     MYID=d.me||''; PLAYERS={}; (d.players||[]).forEach(p=>{ PLAYERS[p.id]=p.name; });
-    PICKLIST=d.picks||[]; MYPICKS={}; PICKLIST.forEach(x=>{ if(x.id===MYID) MYPICKS[x.m]=x.p; });
+    PICKLIST=d.picks||[]; MYPICKS={}; MYSCORES={}; PICKLIST.forEach(x=>{ if(x.id===MYID){ MYPICKS[x.m]=x.p; if(x.s) MYSCORES[x.m]=x.s; } });
     renderPredict();
   }catch(e){ console.warn('loadPredData', e); }
 }
@@ -542,6 +554,19 @@ async function setPick(id,o){
     renderPredict();
     setTimeout(()=>{ if(PICK_FLASH[id]==='saved'){ delete PICK_FLASH[id]; renderPredict(); } }, 2500);
   }
+}
+
+async function setFinalScore(id){
+  if(!ME||!sb) return;
+  const e=DATA.events.find(x=>x.id===id); if(!e||!pickOpen(e)) return;
+  const hi=document.getElementById('fs_h_'+id), ai=document.getElementById('fs_a_'+id);
+  const h=((hi&&hi.value)||'').trim(), a=((ai&&ai.value)||'').trim();
+  if(!/^\d{1,2}$/.test(h)||!/^\d{1,2}$/.test(a)){ PICK_FLASH[id]='err:Enter both scores'; renderPredict(); return; }
+  if(!MYPICKS[id]){ PICK_FLASH[id]='err:Pick the winner first'; renderPredict(); return; }
+  const sc=h+'-'+a; MYSCORES[id]=sc; PICK_FLASH[id]='saving'; renderPredict();
+  let status=null; try{ const r=await sb.rpc('wc_set_pick',{ p_code:CODE, p_email:ME, p_match:id, p_pick:MYPICKS[id], p_score:sc }); status=r&&r.data; }catch(x){}
+  if(status==='ok'){ PICK_FLASH[id]='saved'; renderPredict(); setTimeout(()=>{ if(PICK_FLASH[id]==='saved'){ delete PICK_FLASH[id]; renderPredict(); } },2500); }
+  else { PICK_FLASH[id]='err:Score not saved — tap Save score to retry'; renderPredict(); }
 }
 
 /* Telegram opt-in: optional guided step after sign-up */
@@ -585,9 +610,9 @@ function renderAuth(msg){
 function renderPredictBoard(){
   const box=document.getElementById('predBoard'); if(!box) return;
   if(!ME){ box.innerHTML=''; return; }
-  const byP={}; PICKLIST.forEach(r=>{ (byP[r.id]=byP[r.id]||{})[r.m]=r.p; });
+  const byP={}, byS={}; PICKLIST.forEach(r=>{ (byP[r.id]=byP[r.id]||{})[r.m]=r.p; if(r.s)(byS[r.id]=byS[r.id]||{})[r.m]=r.s; });
   const ids=Object.keys(PLAYERS).length?Object.keys(PLAYERS):Object.keys(byP);
-  const rows=ids.map(pid=>{ const s=scorePicksMap(byP[pid]); return { pid:pid, name:(PLAYERS[pid]||'Player'), me:pid===MYID, pts:s.pts, correct:s.correct, total:s.total }; });
+  const rows=ids.map(pid=>{ const s=scorePicksMap(byP[pid], byS[pid]); return { pid:pid, name:(PLAYERS[pid]||'Player'), me:pid===MYID, pts:s.pts, correct:s.correct, total:s.total }; });
   rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct);
   const lb=rows.map((r,i)=>'<div class="lbrow clk'+(r.me?' me':'')+'" onclick="openPicks(\''+r.pid+'\')"><span class="rk">'+(i+1)+'</span><span class="who">'+String(r.name).replace(/</g,'&lt;')+(r.me?' <span class="youtag">you</span>':'')+'</span><span class="rec">'+r.correct+'/'+r.total+'</span><span class="pp">'+r.pts+'<span class="u">pts</span></span><span class="lbchev">›</span></div>').join('')
     || '<div class="lbrow"><span class="who" style="color:var(--faint)">No players yet — be the first to pick</span></div>';
@@ -600,14 +625,14 @@ function picksEsc(e){ if(e.key==='Escape') closePicks(); }
 function closePicks(){ const m=document.getElementById('picksModal'); if(m) m.remove(); document.removeEventListener('keydown', picksEsc, true); document.body.style.overflow=''; }
 function openPicks(pid){
   closePicks();
-  const byP={}; PICKLIST.forEach(r=>{ (byP[r.id]=byP[r.id]||{})[r.m]=r.p; });
-  const mine=byP[pid]||{}; const name=PLAYERS[pid]||'Player'; const s=scorePicksMap(mine);
+  const byP={}, byS={}; PICKLIST.forEach(r=>{ (byP[r.id]=byP[r.id]||{})[r.m]=r.p; if(r.s)(byS[r.id]=byS[r.id]||{})[r.m]=r.s; });
+  const mine=byP[pid]||{}; const name=PLAYERS[pid]||'Player'; const s=scorePicksMap(mine, byS[pid]||{});
   const has=e=>mine[e.id]!==undefined;
   const settled=DATA.events.filter(e=>e.state==='post'&&pickable(e)&&has(e)).sort((a,b)=>new Date(b.utc)-new Date(a.utc));
   const upcoming=DATA.events.filter(e=>e.state!=='post'&&pickable(e)&&has(e)).sort((a,b)=>new Date(a.utc)-new Date(b.utc));
   const pl=(e,p)=>p==='d'?'Draw':(p==='h'?norm(e.home):norm(e.away));
-  const settledRow=e=>{ const p=mine[e.id], o=outcomeOf(e), skip=e.ko&&o==='d', ok=!skip&&p===o;
-    return '<div class="srow '+(skip?'':(ok?'ok':'no'))+'"><span class="sc">'+norm(e.home)+' '+e.hs+'–'+e.as+' '+norm(e.away)+'</span><span class="mypick">picked '+pl(e,p)+'</span><span class="mark">'+(skip?'–':(ok?'✓':'✗'))+'</span></div>'; };
+  const settledRow=e=>{ const p=mine[e.id], o=koOut(e), pend=!o, ok=!pend&&p===o;
+    return '<div class="srow '+(pend?'':(ok?'ok':'no'))+'"><span class="sc">'+norm(e.home)+' '+e.hs+'–'+e.as+' '+norm(e.away)+'</span><span class="mypick">picked '+pl(e,p)+'</span><span class="mark">'+(pend?'·':(ok?'✓':'✗'))+'</span></div>'; };
   const upRow=e=>'<div class="srow"><span class="sc">'+norm(e.home)+' v '+norm(e.away)+'</span><span class="mypick">picked '+pl(e,mine[e.id])+'</span><span class="mark" style="color:var(--faint)">·</span></div>';
   let body='';
   if(settled.length) body+='<div class="psec">Settled</div>'+settled.map(settledRow).join('');
@@ -634,7 +659,13 @@ function predMatchCard(e){
     : fst==='saved' ? '<span class="pkstat saved">Saved ✓</span>'
     : (fst&&fst.indexOf('err:')===0) ? '<span class="pkstat err">'+fst.slice(4)+'</span>'
     : (pk?'<span class="pkstat saved">Saved ✓</span>':'<span class="pkstat"></span>');
-  return '<div class="pmatch"><div class="pm-top"><span class="stage">'+stage+'</span><span class="time">'+when+'</span></div>'+ctrl+stat+'</div>';
+  const sc=(MYSCORES[e.id]||'').split('-');
+  const scoreUI = isFinalEvent(e)
+    ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid var(--line)">'
+      +'<div style="font-size:12px;color:#9fb3d1;margin-bottom:7px">Predict the final score for <b style="color:var(--gold)">5 pts</b> (winner alone = 3)</div>'
+      +'<div style="display:flex;align-items:center;gap:8px"><input id="fs_h_'+e.id+'" inputmode="numeric" maxlength="2" placeholder="0" value="'+(sc[0]||'')+'" style="width:48px;text-align:center" /><span style="color:var(--faint)">–</span><input id="fs_a_'+e.id+'" inputmode="numeric" maxlength="2" placeholder="0" value="'+(sc[1]||'')+'" style="width:48px;text-align:center" /><button class="pbtn" style="margin-left:auto" onclick="setFinalScore(\''+e.id+'\')">Save score</button></div></div>'
+    : '';
+  return '<div class="pmatch"><div class="pm-top"><span class="stage">'+stage+'</span><span class="time">'+when+'</span></div>'+ctrl+scoreUI+stat+'</div>';
 }
 function renderPredictList(){
   const box=document.getElementById('predList'); if(!box) return;
@@ -646,11 +677,17 @@ function renderPredictList(){
   if(!groupsDone()) html+='<div style="background:rgba(244,194,75,.08);border:1px solid rgba(244,194,75,.34);border-radius:10px;padding:11px 13px;margin-bottom:12px;color:#f4c24b;font-weight:700;font-size:13px;line-height:1.45">🔒 Round of 32 pool — $100 to the winner. Picks open once the group stage wraps.</div>';
   if(!keys.length) html+='<div class="note">No upcoming matches to pick right now.</div>';
   keys.forEach(k=>{ html+='<div class="pday"><div class="daylabel">'+dayLabel(new Date(days[k][0].utc))+'<span></span></div>'+days[k].map(predMatchCard).join('')+'</div>'; });
+  const locked=DATA.events.filter(e=>e.ko && pickable(e) && !pickOpen(e) && e.state!=='post').sort((a,b)=>new Date(a.utc)-new Date(b.utc));
+  if(locked.length){
+    html+='<div class="pday"><div class="daylabel">🔒 Knockout — locked until the group stage ends<span></span></div>'
+      + locked.map(e=>'<div class="pmatch" style="opacity:.55"><div class="pm-top"><span class="stage">Knockout</span><span class="time" style="color:var(--gold);font-weight:700">🔒 Locked</span></div><div class="pkrow ko"><span class="pk" style="cursor:default;pointer-events:none">'+norm(e.home)+'</span><span class="pk" style="cursor:default;pointer-events:none">'+norm(e.away)+'</span></div></div>').join('')
+      +'</div>';
+  }
   const settled=DATA.events.filter(e=>e.state==='post'&&pickable(e)&&MYPICKS[e.id]&&!pickOpen(e)).sort((a,b)=>new Date(b.utc)-new Date(a.utc));
   if(settled.length){
-    const rows=settled.map(e=>{ const o=outcomeOf(e); const p=MYPICKS[e.id]; const skip=e.ko&&o==='d'; const ok=!skip&&p===o;
+    const rows=settled.map(e=>{ const o=koOut(e); const p=MYPICKS[e.id]; const pend=!o; const ok=!pend&&p===o;
       const pl=p==='d'?'Draw':(p==='h'?norm(e.home):norm(e.away));
-      return '<div class="srow '+(skip?'':(ok?'ok':'no'))+'"><span class="sc">'+norm(e.home)+' '+e.hs+'–'+e.as+' '+norm(e.away)+'</span><span class="mypick">picked '+pl+'</span><span class="mark">'+(skip?'–':(ok?'✓':'✗'))+'</span></div>'; }).join('');
+      return '<div class="srow '+(pend?'':(ok?'ok':'no'))+'"><span class="sc">'+norm(e.home)+' '+e.hs+'–'+e.as+' '+norm(e.away)+'</span><span class="mypick">picked '+pl+'</span><span class="mark">'+(pend?'·':(ok?'✓':'✗'))+'</span></div>'; }).join('');
     html+='<details class="settled"><summary>Your settled picks <span class="cnt">'+settled.length+'</span></summary>'+rows+'</details>';
   }
   box.innerHTML=html;
@@ -695,6 +732,13 @@ function openRulesModal(){ closeRulesModal();
 })();"""
 
 tpl = tpl[:s] + NEW_PRED_JS + tpl[e:]
+
+# 7a) processEvents: capture the actual winner (incl. penalties) from ESPN's competitor.winner flag,
+# so knockout picks score by who advanced — not the raw 90/120-min scoreline.
+PE_OLD = "m.hs=+(H.score||0); m.as=+(A.score||0);"
+PE_NEW = "m.hs=+(H.score||0); m.as=+(A.score||0); m.win=(H.winner===true?'h':(A.winner===true?'a':''));"
+if PE_OLD not in tpl: fail("processEvents score anchor not found")
+tpl = tpl.replace(PE_OLD, PE_NEW, 1)
 
 # 7b) "View Highlights" button on completed match cards (reel modal)
 CARD_OLD = r"""+(showScore?'':oddsBlock(o))+detail+'</div>';"""
