@@ -555,6 +555,7 @@
   <section id="predict" class="page" hidden="">
     <div class="sec-head"><h2>Predict</h2>
       <div class="sub">Sign up, pick the winners, climb the shared leaderboard</div>
+      <button class="linkbtn" style="margin-top:6px;font-size:13px" onclick="openRulesModal()">ℹ️ How it works</button>
     </div>
     <div id="predAuth"></div>
     <div id="predTg"></div>
@@ -1217,6 +1218,19 @@ async function joinLeague(){
   ME=email; MYNAME=[first,last].filter(Boolean).join(' ').slice(0,40); CODE=code; saveJoin();
   renderAuth(); await loadPredData(); startPoll(); renderPredict();
 }
+async function loginByEmail(){
+  if(!sb) return;
+  const em=document.getElementById('loginEmail'); const st=document.getElementById('predAuthMsg');
+  const email=((em&&em.value)||'').trim().toLowerCase();
+  const bad=(m)=>{ if(em){em.classList.add('bad'); setTimeout(()=>em.classList.remove('bad'),1200);} if(st) st.textContent=m; };
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return bad('Enter a valid email.');
+  if(st) st.textContent='Logging in…';
+  let res; try{ res=await sb.rpc('wc_login',{ p_email:email }); }catch(e){ if(st) st.textContent='Something went wrong, try again.'; return; }
+  const d=res&&res.data;
+  if(!d || d.error){ if(d&&d.error==='not_found') return bad('No sign-up found for that email — use “Join the pool” above.'); return bad('Could not log in, try again.'); }
+  ME=email; MYNAME=d.name||email.split('@')[0]; CODE=d.code; saveJoin();
+  renderAuth(); await loadPredData(); startPoll(); renderPredict();
+}
 function leaveLeague(){ stopPoll(); ME=null; MYNAME=''; CODE=''; MYID=''; MYPICKS={}; PICKLIST=[]; PLAYERS={}; try{ localStorage.removeItem(JOIN_KEY); }catch(e){} renderAuth(); renderPredict(); }
 async function loadPredData(){ if(!sb||!ME||!CODE) return;
   try{
@@ -1245,7 +1259,7 @@ async function setPick(id,o){
     console.warn('setPick failed', err||status);
     if(prev===undefined){ delete MYPICKS[id]; const j=PICKLIST.findIndex(x=>x.id===MYID&&x.m===id); if(j>=0) PICKLIST.splice(j,1); }
     else { MYPICKS[id]=prev; const j=PICKLIST.findIndex(x=>x.id===MYID&&x.m===id); if(j>=0) PICKLIST[j].p=prev; }
-    PICK_FLASH[id]= status==='locked' ? 'err:Locked — kickoff passed' : 'err:Not saved — tap to retry';
+    PICK_FLASH[id]= status==='locked' ? 'err:Locked — kickoff passed' : status==='closed' ? 'err:Opens after the group stage' : 'err:Not saved — tap to retry';
     renderPredict();
   } else {
     PICK_FLASH[id]='saved';
@@ -1285,6 +1299,8 @@ function renderAuth(msg){
       +'<div class="surow"><input id="suFirst" type="text" maxlength="24" placeholder="First name" autocomplete="given-name" /><input id="suLast" type="text" maxlength="24" placeholder="Last name" autocomplete="family-name" /></div>'
       +'<div class="surow"><input id="predEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com" /><input id="predCode" type="text" inputmode="numeric" maxlength="6" placeholder="League code" /></div>'
       +'<div class="addrow"><button class="pbtn solid" style="flex:1" onclick="joinLeague()">Join the pool</button></div>'
+      +'<div style="text-align:center;color:#6b7a99;font-size:12px;font-weight:700;margin:15px 0 9px">— already signed up? just enter your email —</div>'
+      +'<div class="surow"><input id="loginEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@email.com" /><button class="pbtn" style="white-space:nowrap" onclick="loginByEmail()">Log back in</button></div>'
       +'<div id="predAuthMsg" class="authmsg">'+(msg||'')+'</div></div>';
   }
 }
@@ -1345,6 +1361,7 @@ function predMatchCard(e){
 function renderPredictList(){
   const box=document.getElementById('predList'); if(!box) return;
   if(!ME){ box.innerHTML=''; return; }
+  try{ if(!localStorage.getItem('wc_rules_seen')){ var ps=document.getElementById('predict'); if(ps && !ps.hidden){ localStorage.setItem('wc_rules_seen','1'); setTimeout(openRulesModal,450); } } }catch(e){}
   const up=DATA.events.filter(e=>pickable(e)&&pickOpen(e)).sort((a,b)=>new Date(a.utc)-new Date(b.utc));
   const days={}; up.forEach(e=>{const k=dayNum(new Date(e.utc)); (days[k]=days[k]||[]).push(e);});
   const keys=Object.keys(days).sort(); let html='';
@@ -1370,6 +1387,26 @@ function closeReel(){ const md=document.getElementById('reelModal'); if(md){ con
 function ytId(u){ var m=String(u||'').match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/); return m?m[1]:null; }
 function openReel(url){ if(!url) return; closeReel(); var yt=ytId(url); var media = yt ? '<iframe src="https://www.youtube.com/embed/'+yt+'?autoplay=1&rel=0&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>' : '<video src="'+url+'" controls autoplay playsinline></video>'; const ov=document.createElement('div'); ov.className='reelmodal'; ov.id='reelModal'; ov.innerHTML='<div class="reelbox"><button class="reelclose" onclick="closeReel()" aria-label="Close">×</button>'+media+'</div>'; ov.addEventListener('click', function(e){ if(e.target===ov) closeReel(); }); document.body.appendChild(ov); document.addEventListener('keydown', reelEsc, true); document.body.style.overflow='hidden'; }
 loadReels(); setInterval(loadReels, 300000);
+/* Knockout Pool — "How it works" modal (Predict page) */
+function closeRulesModal(){ var m=document.getElementById('rulesModal'); if(m) m.remove(); document.body.style.overflow=''; }
+function openRulesModal(){ closeRulesModal();
+  var ov=document.createElement('div'); ov.id='rulesModal';
+  ov.style.cssText='position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div style="position:relative;width:min(440px,96vw);max-height:88vh;overflow:auto;background:var(--panel,#0f1626);border:1px solid var(--line,#243150);border-radius:16px;padding:22px 20px;color:var(--ink,#eaf2ff);font-family:Inter,system-ui,sans-serif">'
+    +'<button onclick="closeRulesModal()" aria-label="Close" style="position:absolute;top:10px;right:12px;background:none;border:0;color:#9fb3d1;font-size:22px;line-height:1;cursor:pointer">×</button>'
+    +'<h3 style="margin:0 0 6px;font-size:19px;font-weight:800">Welcome to the Knockout Pool 🏆</h3>'
+    +'<p style="margin:0 0 14px;color:#9fb3d1;font-size:13px">Here is how it works:</p>'
+    +'<div style="display:flex;flex-direction:column;gap:11px;font-size:14px;line-height:1.5">'
+    +'<div>⚽ <b>Pick the winner</b> of every match for the rest of the 2026 World Cup. Each correct pick = <b>3 points</b>.</div>'
+    +'<div>🥅 In the <b>Final</b>, you will also call the score — nail the result <b>and</b> the score for <b>5 points</b>.</div>'
+    +'<div>💵 Most points at the end takes the <b style="color:var(--gold,#f4c24b)">$100 cash</b> — from Don, due on sight.</div>'
+    +'</div>'
+    +'<p style="margin:16px 0 0;font-size:13px;color:#9fb3d1;font-style:italic">May the most knowledgeable futbol fan win… or not. Good luck! ⚽</p>'
+    +'<button onclick="closeRulesModal()" style="margin-top:18px;width:100%;background:var(--cyan,#38bdf8);color:#08111c;border:0;border-radius:10px;padding:11px;font-weight:800;font-size:14px;cursor:pointer">Got it</button>'
+    +'</div>';
+  ov.addEventListener('click',function(ev){ if(ev.target===ov) closeRulesModal(); });
+  document.body.appendChild(ov); document.body.style.overflow='hidden';
+}
 /* $100 Round-of-32 pool announcement — dismissible sitewide banner */
 (function(){ try{ if(localStorage.getItem('wc_pool_banner')==='off') return; }catch(e){}
   var b=document.createElement('div');
