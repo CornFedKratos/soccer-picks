@@ -443,7 +443,8 @@ try{ TG_DISMISSED = localStorage.getItem('wc_tg_dismissed')==='1'; }catch(e){}
 
 const outcomeOf=e=> e.hs>e.as?'h':(e.as>e.hs?'a':'d');
 function pickable(e){ return KNOWN.has(e.home)&&KNOWN.has(e.away); }
-function pickOpen(e){ return new Date(e.utc).getTime() > Date.now(); } // locked at kickoff, no exceptions
+function groupsDone(){ return !DATA.events.some(x=>!x.ko && x.state!=='post'); } // every group match finished
+function pickOpen(e){ if(e.ko && !groupsDone()) return false; return new Date(e.utc).getTime() > Date.now(); } // R32+ frozen until the group stage ends; all picks lock at kickoff
 function scorePicksMap(map){ let pts=0,correct=0,total=0; map=map||{};
   DATA.events.forEach(e=>{ if(e.state!=='post'||!pickable(e)) return; const p=map[e.id]; if(!p) return;
     const o=outcomeOf(e); if(e.ko&&o==='d') return; total++; if(p===o){correct++; pts+=3;} });
@@ -615,6 +616,7 @@ function renderPredictList(){
   const up=DATA.events.filter(e=>pickable(e)&&pickOpen(e)).sort((a,b)=>new Date(a.utc)-new Date(b.utc));
   const days={}; up.forEach(e=>{const k=dayNum(new Date(e.utc)); (days[k]=days[k]||[]).push(e);});
   const keys=Object.keys(days).sort(); let html='';
+  if(!groupsDone()) html+='<div style="background:rgba(244,194,75,.08);border:1px solid rgba(244,194,75,.34);border-radius:10px;padding:11px 13px;margin-bottom:12px;color:#f4c24b;font-weight:700;font-size:13px;line-height:1.45">🔒 Round of 32 pool — $100 to the winner. Picks open once the group stage wraps.</div>';
   if(!keys.length) html+='<div class="note">No upcoming matches to pick right now.</div>';
   keys.forEach(k=>{ html+='<div class="pday"><div class="daylabel">'+dayLabel(new Date(days[k][0].utc))+'<span></span></div>'+days[k].map(predMatchCard).join('')+'</div>'; });
   const settled=DATA.events.filter(e=>e.state==='post'&&pickable(e)&&MYPICKS[e.id]&&!pickOpen(e)).sort((a,b)=>new Date(b.utc)-new Date(a.utc));
@@ -635,7 +637,15 @@ function reelEsc(e){ if(e.key==='Escape') closeReel(); }
 function closeReel(){ const md=document.getElementById('reelModal'); if(md){ const v=md.querySelector('video'); if(v){ try{ v.pause(); }catch(_){} } md.remove(); } document.removeEventListener('keydown', reelEsc, true); document.body.style.overflow=''; }
 function ytId(u){ var m=String(u||'').match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/); return m?m[1]:null; }
 function openReel(url){ if(!url) return; closeReel(); var yt=ytId(url); var media = yt ? '<iframe src="https://www.youtube.com/embed/'+yt+'?autoplay=1&rel=0&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>' : '<video src="'+url+'" controls autoplay playsinline></video>'; const ov=document.createElement('div'); ov.className='reelmodal'; ov.id='reelModal'; ov.innerHTML='<div class="reelbox"><button class="reelclose" onclick="closeReel()" aria-label="Close">×</button>'+media+'</div>'; ov.addEventListener('click', function(e){ if(e.target===ov) closeReel(); }); document.body.appendChild(ov); document.addEventListener('keydown', reelEsc, true); document.body.style.overflow='hidden'; }
-loadReels(); setInterval(loadReels, 300000);"""
+loadReels(); setInterval(loadReels, 300000);
+/* $100 Round-of-32 pool announcement — dismissible sitewide banner */
+(function(){ try{ if(localStorage.getItem('wc_pool_banner')==='off') return; }catch(e){}
+  var b=document.createElement('div');
+  b.style.cssText='position:relative;z-index:60;background:linear-gradient(90deg,#0f2a44,#0f3a2e);border-bottom:1px solid #1c3b33;color:#eaf2ff;font:600 13px/1.45 Inter,system-ui,sans-serif;padding:9px 38px 9px 14px;text-align:center';
+  b.innerHTML='👋 Welcome friends! New <b>$100 knockout pool</b> starts at the Round of 32 — winner takes $100 cash. Picks open after the group stage finishes. ⚽<button aria-label="Dismiss" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:0;color:#9fb3d1;font-size:19px;line-height:1;cursor:pointer;padding:4px 8px">×</button>';
+  b.querySelector('button').onclick=function(){ b.remove(); try{ localStorage.setItem('wc_pool_banner','off'); }catch(e){} };
+  document.body.insertBefore(b, document.body.firstChild);
+})();"""
 
 tpl = tpl[:s] + NEW_PRED_JS + tpl[e:]
 
