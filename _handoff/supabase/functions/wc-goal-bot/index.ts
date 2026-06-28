@@ -368,26 +368,45 @@ Deno.serve(async (req) => {
     const cardHead = await sb.from("card_events").select("id", { count: "exact", head: true });
     const cardFirstRun = (cardHead.count ?? 0) === 0;
     out.firstRun = firstRun;
-    const subRes = await sb.from("tg_subscribers").select("chat_id").eq("active", true);
-    const subs = (subRes.data || []).map((r: any) => r.chat_id);
-    out.subs = subs.length;
+    // subscribers + their notification prefs (followed countries + daily-brief toggle), linked via players.email
+    const subRes = await sb.from("tg_subscribers").select("chat_id,email").eq("active", true);
+    const subsRaw = (subRes.data || []) as any[];
+    out.subs = subsRaw.length;
+    const prefByEmail: Record<string, { countries: string[] | null; brief: boolean }> = {};
+    try {
+      const emails = subsRaw.map((r) => r.email).filter(Boolean);
+      if (emails.length) {
+        const pr = await sb.from("players").select("email,countries,brief").in("email", emails);
+        for (const p of ((pr.data || []) as any[])) prefByEmail[p.email] = { countries: p.countries ?? null, brief: p.brief !== false };
+      }
+    } catch (_) {}
+    const subList = subsRaw.map((r) => ({ chat: r.chat_id, ...(prefByEmail[r.email] || { countries: null as string[] | null, brief: true }) }));
 
     // TEST MODE: route every Telegram send to the operator only
     const TEST_MODE = (await getVault("test_mode")) === "1";
     const TEST_CHAT = TEST_MODE ? await getVault("tg_test_chat") : "";
-    const sendSubs = TEST_MODE ? (TEST_CHAT ? [TEST_CHAT] : []) : subs;
     const groupChat = TEST_MODE ? "" : TG_CHAT;
     out.testMode = TEST_MODE;
-    const sendText = async (text: string, preview: boolean) => {
-      let ok = (sendSubs.length === 0 && !groupChat);
+    // target: undefined = all subs (general); {home,away} = only subs following that match; "brief" = only daily-brief subs.
+    // countries == null means "follow everything" (default, no opt-out); the shared group chat always gets everything.
+    const chatsFor = (target?: any): any[] => {
+      if (TEST_MODE) return TEST_CHAT ? [TEST_CHAT] : [];
+      if (target === "brief") return subList.filter((s) => s.brief !== false).map((s) => s.chat);
+      if (target && (target.home || target.away)) return subList.filter((s) => s.countries == null || s.countries.includes(target.home || "") || s.countries.includes(target.away || "")).map((s) => s.chat);
+      return subList.map((s) => s.chat);
+    };
+    const sendText = async (text: string, preview: boolean, target?: any) => {
+      const chats = chatsFor(target);
+      let ok = (chats.length === 0 && !groupChat);
       if (groupChat) { const r = await tg("sendMessage", { chat_id: groupChat, text, disable_web_page_preview: !preview }); if (r && r.ok) ok = true; }
-      for (const cid of sendSubs) { const r = await tg("sendMessage", { chat_id: cid, text, disable_web_page_preview: !preview }); if (r && r.ok) ok = true; }
+      for (const cid of chats) { const r = await tg("sendMessage", { chat_id: cid, text, disable_web_page_preview: !preview }); if (r && r.ok) ok = true; }
       return ok;
     };
-    const sendVid = async (url: string, caption: string) => {
-      let ok = (sendSubs.length === 0 && !groupChat);
+    const sendVid = async (url: string, caption: string, target?: any) => {
+      const chats = chatsFor(target);
+      let ok = (chats.length === 0 && !groupChat);
       if (groupChat) { const r = await tg("sendVideo", { chat_id: groupChat, video: url, caption }); if (r && r.ok) ok = true; }
-      for (const cid of sendSubs) { const r = await tg("sendVideo", { chat_id: cid, video: url, caption }); if (r && r.ok) ok = true; }
+      for (const cid of chats) { const r = await tg("sendVideo", { chat_id: cid, video: url, caption }); if (r && r.ok) ok = true; }
       return ok;
     };
 
@@ -435,7 +454,7 @@ Deno.serve(async (req) => {
       const shouldAlert = !firstRun && (g.state === "in" || (g.state === "post" && recent));
       if (shouldAlert) {
         g.assist = await assistFor(g.match_id, g.scorer);
-        await sendText(goalText(g), false);
+        await sendText(goalText(g), false, { home: g.home, away: g.away });
         await sb.from("goal_events").update({ alerted: true }).eq("id", ins.data.id);
         out.alerted++;
       }
@@ -452,7 +471,7 @@ Deno.serve(async (req) => {
       const team = cv.side === "h" ? cv.home : cv.away;
       const icon = cv.kind === "red" ? "🟥" : "🟨";
       const label = cv.kind === "red" ? "Red card" : "Yellow card";
-      await sendText(`${icon} ${label} — ${cv.player || "Player"} (${team}) ${cv.minute}\n${cv.home} v ${cv.away}`, false);
+      await sendText(`${icon} ${label} — ${cv.player || "Player"} (${team}) ${cv.minute}\n${cv.home} v ${cv.away}`, false, { home: cv.home, away: cv.away });
       await sb.from("card_events").update({ alerted: true }).eq("id", ins.data.id);
       out.cards++;
     }
@@ -475,7 +494,7 @@ Deno.serve(async (req) => {
         }
       } catch (_) {}
       const t = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" }).format(new Date(m.kickoff));
-      const okp = await sendText(`⏰ ${m.away} vs ${m.home}\nStarting ${t} CT${oddsLine}`, false);
+      const okp = await sendText(`⏰ ${m.away} vs ${m.home}\nStarting ${t} CT${oddsLine}`, false, { home: m.home, away: m.away });
       if (okp) { await sb.from("pregame_alerts").insert({ match_id: m.match_id }); out.pregame++; }
     }
 
@@ -510,9 +529,10 @@ Deno.serve(async (req) => {
       // already delivered (video OR link fallback) — never re-send. The select still returns sent clips
       // whose our_url is null (link fallback), so without this guard the fallback re-fired every tick.
       if (cl.sent) continue;
+      const ctgt = (() => { const cm = matchRows.find((x: any) => x.match_id === cl.match_id); return cm ? { home: cm.home, away: cm.away } : undefined; })();
       if (cl.our_url) {
         // preferred: our ad-free, inline-playable compressed clip
-        if (!cl.sent) { const cap = await clipCaption(cl, matchRows); if (await sendVid(cl.our_url, cap)) { await sb.from("clips").update({ sent: true }).eq("clip_id", cl.clip_id); out.clipsFound++; } }
+        if (!cl.sent) { const cap = await clipCaption(cl, matchRows); if (await sendVid(cl.our_url, cap, ctgt)) { await sb.from("clips").update({ sent: true }).eq("clip_id", cl.clip_id); out.clipsFound++; } }
         continue;
       }
       const checks = cl.checks ?? 0;
@@ -522,7 +542,7 @@ Deno.serve(async (req) => {
       } else {
         // can't get a downloadable clip — ALWAYS send the highlight: fall back to the (ad-supported) page link
         const cap = await clipCaption(cl, matchRows);
-        if (await sendText(`${cap}\n${cl.src_url}`, true)) { await sb.from("clips").update({ sent: true }).eq("clip_id", cl.clip_id); out.clipsFound++; }
+        if (await sendText(`${cap}\n${cl.src_url}`, true, ctgt)) { await sb.from("clips").update({ sent: true }).eq("clip_id", cl.clip_id); out.clipsFound++; }
       }
     }
 
@@ -545,7 +565,7 @@ Deno.serve(async (req) => {
         const lines = goals.map((g: any) => `${g.minute} ${g.flag} ${g.scorer || "Goal"}`).join("\n");
         const text = `🏁 Full-time\n${flagFor(m.home)} ${m.home} ${hs}-${as} ${m.away} ${flagFor(m.away)}\n${verdict}` +
           (lines ? `\n\nScorers:\n${lines}` : "") + `\nFIFA World Cup`;
-        if (await sendText(text, false)) { await sb.from("matches").update({ summary_sent: true }).eq("match_id", m.match_id); out.summaries++; }
+        if (await sendText(text, false, { home: m.home, away: m.away })) { await sb.from("matches").update({ summary_sent: true }).eq("match_id", m.match_id); out.summaries++; }
       }
     }
 
@@ -589,7 +609,7 @@ Deno.serve(async (req) => {
             blocks.push(`${flagFor(away)} ${away} at ${flagFor(home)} ${home}\n${t} CT${oddsLine}`);
           }
           const text = `📋 Match Day — ${dateLabel}\n\n${blocks.join("\n\n")}\n\nFIFA World Cup`;
-          const okb = await sendText(text, false);
+          const okb = await sendText(text, false, "brief");
           if (okb && !force) { await sb.from("matchday_briefs").upsert({ brief_date: briefYmd }, { onConflict: "brief_date", ignoreDuplicates: true }); out.brief = true; }
         } else if (!force) {
           await sb.from("matchday_briefs").upsert({ brief_date: briefYmd }, { onConflict: "brief_date", ignoreDuplicates: true });
@@ -634,7 +654,7 @@ Deno.serve(async (req) => {
         const fresh = fin && (Date.now() - fin) <= 60 * 60 * 1000;
         if (!fresh) { await sb.from("match_reels").update({ status: "archived" }).eq("match_id", r.match_id); continue; }
         const cap = `⚽ Full-time highlights\n${mr.data!.home} ${mr.data!.home_score}-${mr.data!.away_score} ${mr.data!.away}\nFIFA World Cup`;
-        if (await sendVid(r.url, cap)) { await sb.from("match_reels").update({ status: "sent" }).eq("match_id", r.match_id); out.reelsSent++; }
+        if (await sendVid(r.url, cap, { home: mr.data!.home, away: mr.data!.away })) { await sb.from("match_reels").update({ status: "sent" }).eq("match_id", r.match_id); out.reelsSent++; }
       }
       // embed highlights: board shows them via wc_reels; send the YouTube link to subscribers for fresh matches only
       const emb = await sb.from("match_reels").select("match_id,url").eq("status", "embed").limit(20);
@@ -645,7 +665,7 @@ Deno.serve(async (req) => {
         const fresh = fin && (Date.now() - fin) <= 60 * 60 * 1000;
         if (!fresh) continue; // historical: viewable on the board, no Telegram blast
         const cap = `🎬 Highlights: ${mr.data!.away} at ${mr.data!.home}\n${r.url}`;
-        if (await sendText(cap, true)) { await sb.from("match_reels").update({ status: "embed_sent" }).eq("match_id", r.match_id); out.embedsSent++; }
+        if (await sendText(cap, true, { home: mr.data!.home, away: mr.data!.away })) { await sb.from("match_reels").update({ status: "embed_sent" }).eq("match_id", r.match_id); out.embedsSent++; }
       }
       // BACKFILL (board-only, never notifies): upgrade past matches that lack a downloaded MP4 reel
       // to the best obtainable reel. Throttled, oldest-first, capped attempts so dead matches stop.

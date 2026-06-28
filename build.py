@@ -108,6 +108,7 @@ NEW_SECTION = ('<section id="predict" class="page" hidden="">\n'
     '    </div>\n'
     '    <div id="predAuth"></div>\n'
     '    <div id="predTg"></div>\n'
+    '    <div id="predNotify"></div>\n'
     '    <div id="predBoard"></div>\n'
     '    <div id="predList"></div>\n'
     '  </section>')
@@ -439,7 +440,7 @@ const SB_KEY='sb_publishable_bsmzithS3xRk2_VLdBKFKg_97YqazB6';
 const TG_BOT='SCHM1NK_SoccerPicks_Bot';
 let sb=null;
 try{ sb = window.supabase.createClient(SB_URL, SB_KEY, { db:{schema:'worldcup'}, auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } }); }catch(e){ console.warn('supabase init failed', e); }
-let ME=null, MYNAME='', CODE='', MYID='', MYPICKS={}, MYSCORES={}, PLAYERS={}, PICKLIST=[], MYSUB=false, predRefreshTimer=null, TG_DISMISSED=false, PICK_FLASH={};
+let ME=null, MYNAME='', CODE='', MYID='', MYPICKS={}, MYSCORES={}, PLAYERS={}, PICKLIST=[], MYSUB=false, predRefreshTimer=null, TG_DISMISSED=false, PICK_FLASH={}, MY_COUNTRIES=null, MY_BRIEF=true, TEAMS=null;
 try{ TG_DISMISSED = localStorage.getItem('wc_tg_dismissed')==='1'; }catch(e){}
 
 const outcomeOf=e=> e.hs>e.as?'h':(e.as>e.hs?'a':'d');
@@ -528,6 +529,7 @@ async function loadPredData(){ if(!sb||!ME||!CODE) return;
     if(!d || d.error){ if(d&&d.error==='bad_code') leaveLeague(); return; }
     MYID=d.me||''; PLAYERS={}; (d.players||[]).forEach(p=>{ PLAYERS[p.id]=p.name; });
     PICKLIST=d.picks||[]; MYPICKS={}; MYSCORES={}; PICKLIST.forEach(x=>{ if(x.id===MYID){ MYPICKS[x.m]=x.p; if(x.s) MYSCORES[x.m]=x.s; } });
+    const pf=d.prefs||{}; MY_COUNTRIES=(pf.countries==null?null:pf.countries); MY_BRIEF=(pf.brief!==false);
     renderPredict();
   }catch(e){ console.warn('loadPredData', e); }
 }
@@ -692,7 +694,31 @@ function renderPredictList(){
   }
   box.innerHTML=html;
 }
-function renderPredict(){ renderTelegram(); renderPredictBoard(); renderPredictList(); if(typeof renderShell==='function') renderShell(); }
+/* Notification preferences: follow specific countries (or all/none) + daily-brief toggle. */
+function loadTeams(){ if(TEAMS||!sb) return; sb.rpc('wc_teams').then(r=>{ TEAMS=(r&&r.data)||[]; renderNotify(); }).catch(()=>{}); }
+function toggleTeamI(i){ if(!TEAMS) return; const t=TEAMS[i]; if(MY_COUNTRIES==null) MY_COUNTRIES=TEAMS.slice(); const j=MY_COUNTRIES.indexOf(t); if(j>=0) MY_COUNTRIES.splice(j,1); else MY_COUNTRIES.push(t); renderNotify(); }
+function followAllTeams(){ MY_COUNTRIES=null; renderNotify(); }
+function followNoTeams(){ MY_COUNTRIES=[]; renderNotify(); }
+function toggleBrief(){ MY_BRIEF=!MY_BRIEF; renderNotify(); }
+async function saveNotify(){ if(!ME||!sb) return; const st=document.getElementById('notifyMsg'); if(st) st.textContent='Saving…';
+  let status=null; try{ const r=await sb.rpc('wc_set_prefs',{ p_code:CODE, p_email:ME, p_countries:MY_COUNTRIES, p_brief:MY_BRIEF }); status=r&&r.data; }catch(e){}
+  if(st){ st.textContent = status==='ok' ? 'Saved ✓' : 'Could not save — try again.'; st.style.color = status==='ok' ? 'var(--win)' : 'var(--loss)'; }
+}
+function renderNotify(){
+  const box=document.getElementById('predNotify'); if(!box) return;
+  if(!ME){ box.innerHTML=''; return; }
+  if(!TEAMS){ loadTeams(); box.innerHTML='<div class="tgcard"><div class="tgh">🔔 Notifications</div><div class="tgsub">Loading teams…</div></div>'; return; }
+  const all=MY_COUNTRIES==null, sel=all?null:MY_COUNTRIES;
+  const summary=all?'You follow <b>all teams</b>.':(sel.length?('Following <b>'+sel.length+'</b> team'+(sel.length>1?'s':'')+'.'):'<b>Muted</b> — no match alerts.');
+  const chips=TEAMS.map((t,i)=>{ const on=all||sel.indexOf(t)>=0; return '<button class="pk'+(on?' sel':'')+'" style="font-size:12px;padding:6px 10px" onclick="toggleTeamI('+i+')">'+(typeof flag==='function'?'<span class="flag">'+flag(t)+'</span> ':'')+String(t).replace(/</g,'&lt;')+'</button>'; }).join('');
+  box.innerHTML='<div class="tgcard"><div class="tgh">🔔 Notifications</div>'
+    +'<div class="tgsub">'+summary+' Goal alerts, clips &amp; full-time recaps come for your followed teams — tap to choose, or follow all.</div>'
+    +'<div style="display:flex;gap:8px;margin:11px 0 9px"><button class="pbtn" onclick="followAllTeams()">Follow all</button><button class="pbtn ghost" onclick="followNoTeams()">Follow none</button></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:7px">'+chips+'</div>'
+    +'<label style="display:flex;align-items:center;gap:9px;margin-top:14px;font-size:13px;cursor:pointer"><input type="checkbox" '+(MY_BRIEF?'checked':'')+' onclick="toggleBrief()"> Daily fixtures brief (one message a day)</label>'
+    +'<div style="display:flex;align-items:center;gap:12px;margin-top:13px"><button class="pbtn solid" onclick="saveNotify()">Save preferences</button><span id="notifyMsg" class="authmsg" style="margin:0"></span></div></div>';
+}
+function renderPredict(){ renderTelegram(); renderNotify(); renderPredictBoard(); renderPredictList(); if(typeof renderShell==='function') renderShell(); }
 
 /* ===================== Full-game highlight reels (View Highlights) ===================== */
 window.REELS = {};
