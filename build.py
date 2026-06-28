@@ -440,7 +440,7 @@ const SB_KEY='sb_publishable_bsmzithS3xRk2_VLdBKFKg_97YqazB6';
 const TG_BOT='SCHM1NK_SoccerPicks_Bot';
 let sb=null;
 try{ sb = window.supabase.createClient(SB_URL, SB_KEY, { db:{schema:'worldcup'}, auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } }); }catch(e){ console.warn('supabase init failed', e); }
-let ME=null, MYNAME='', CODE='', MYID='', MYPICKS={}, MYSCORES={}, PLAYERS={}, PICKLIST=[], MYSUB=false, predRefreshTimer=null, TG_DISMISSED=false, PICK_FLASH={}, MY_COUNTRIES=null, MY_BRIEF=true, TEAMS=null;
+let ME=null, MYNAME='', CODE='', MYID='', MYPICKS={}, MYSCORES={}, PLAYERS={}, PICKLIST=[], MYSUB=false, predRefreshTimer=null, TG_DISMISSED=false, PICK_FLASH={}, MY_COUNTRIES=null, MY_BRIEF=true, TEAMS=null, NOTIFY_OPEN=null;
 try{ TG_DISMISSED = localStorage.getItem('wc_tg_dismissed')==='1'; }catch(e){}
 
 const outcomeOf=e=> e.hs>e.as?'h':(e.as>e.hs?'a':'d');
@@ -700,6 +700,7 @@ function toggleTeamI(i){ if(!TEAMS) return; const t=TEAMS[i]; if(MY_COUNTRIES==n
 function followAllTeams(){ MY_COUNTRIES=null; renderNotify(); }
 function followNoTeams(){ MY_COUNTRIES=[]; renderNotify(); }
 function toggleBrief(){ MY_BRIEF=!MY_BRIEF; renderNotify(); }
+function toggleNotifyOpen(){ if(NOTIFY_OPEN==null){ try{ NOTIFY_OPEN=localStorage.getItem('wc_notify_open')==='1'; }catch(e){ NOTIFY_OPEN=false; } } NOTIFY_OPEN=!NOTIFY_OPEN; try{ localStorage.setItem('wc_notify_open',NOTIFY_OPEN?'1':'0'); }catch(e){} renderNotify(); }
 async function saveNotify(){ if(!ME||!sb) return; const st=document.getElementById('notifyMsg'); if(st) st.textContent='Saving…';
   let status=null; try{ const r=await sb.rpc('wc_set_prefs',{ p_code:CODE, p_email:ME, p_countries:MY_COUNTRIES, p_brief:MY_BRIEF }); status=r&&r.data; }catch(e){}
   if(st){ st.textContent = status==='ok' ? 'Saved ✓' : 'Could not save — try again.'; st.style.color = status==='ok' ? 'var(--win)' : 'var(--loss)'; }
@@ -708,11 +709,14 @@ function renderNotify(){
   const box=document.getElementById('predNotify'); if(!box) return;
   if(!ME){ box.innerHTML=''; return; }
   if(!TEAMS){ loadTeams(); box.innerHTML='<div class="tgcard"><div class="tgh">🔔 Notifications</div><div class="tgsub">Loading teams…</div></div>'; return; }
+  if(NOTIFY_OPEN==null){ try{ NOTIFY_OPEN=localStorage.getItem('wc_notify_open')==='1'; }catch(e){ NOTIFY_OPEN=false; } }
   const all=MY_COUNTRIES==null, sel=all?null:MY_COUNTRIES;
   const summary=all?'You follow <b>all teams</b>.':(sel.length?('Following <b>'+sel.length+'</b> team'+(sel.length>1?'s':'')+'.'):'<b>Muted</b> — no match alerts.');
+  const head='<div class="tgh" onclick="toggleNotifyOpen()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none"><span>🔔 Notifications</span><span style="font-size:13px;font-weight:600;color:#9fb3d1">'+summary.replace(/<\/?b>/g,'')+' <span style="display:inline-block;transition:transform .15s;transform:rotate('+(NOTIFY_OPEN?'180':'0')+'deg)">▾</span></span></div>';
+  if(!NOTIFY_OPEN){ box.innerHTML='<div class="tgcard">'+head+'</div>'; return; }
   const chips=TEAMS.map((t,i)=>{ const on=all||sel.indexOf(t)>=0; return '<button class="pk'+(on?' sel':'')+'" style="font-size:12px;padding:6px 10px" onclick="toggleTeamI('+i+')">'+(typeof flag==='function'?'<span class="flag">'+flag(t)+'</span> ':'')+String(t).replace(/</g,'&lt;')+'</button>'; }).join('');
-  box.innerHTML='<div class="tgcard"><div class="tgh">🔔 Notifications</div>'
-    +'<div class="tgsub">'+summary+' Goal alerts, clips &amp; full-time recaps come for your followed teams — tap to choose, or follow all.</div>'
+  box.innerHTML='<div class="tgcard">'+head
+    +'<div class="tgsub" style="margin-top:8px">'+summary+' Goal alerts, clips &amp; full-time recaps come for your followed teams — tap to choose, or follow all.</div>'
     +'<div style="display:flex;gap:8px;margin:11px 0 9px"><button class="pbtn" onclick="followAllTeams()">Follow all</button><button class="pbtn ghost" onclick="followNoTeams()">Follow none</button></div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:7px">'+chips+'</div>'
     +'<label style="display:flex;align-items:center;gap:9px;margin-top:14px;font-size:13px;cursor:pointer"><input type="checkbox" '+(MY_BRIEF?'checked':'')+' onclick="toggleBrief()"> Daily fixtures brief (one message a day)</label>'
