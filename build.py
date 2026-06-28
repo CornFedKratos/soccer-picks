@@ -278,6 +278,13 @@ swap(
   """  finally{ fetchLeaders(); fetchStandings(); clearTimeout(liveTimer); liveTimer=setTimeout(liveTick, liveCount()>0?30000:120000); }""",
   "liveTick fetchStandings hook")
 
+# liveTick: poll a forward window (yesterday..+12d) instead of today-only, so upcoming
+# knockout odds + kickoffs refresh on every ESPN poll (not just when a match is "today").
+swap(
+  """const raw=await fetchSB('');""",
+  """const raw=await fetchSB((function(){var a=new Date(Date.now()-864e5),b=new Date(Date.now()+12*864e5),f=function(d){return d.toISOString().slice(0,10).replace(/-/g,'');};return f(a)+'-'+f(b);})());""",
+  "liveTick forward-window odds refresh")
+
 swap(
   """function statusBadge(k){
   if(k==='in')  return '<span class="st st-in">IN</span>';
@@ -670,7 +677,8 @@ function predMatchCard(e){
       +'<div style="font-size:12px;color:#9fb3d1;margin-bottom:7px">Predict the final score for <b style="color:var(--gold)">5 pts</b> (winner alone = 3)</div>'
       +'<div style="display:flex;align-items:center;gap:8px"><input id="fs_h_'+e.id+'" inputmode="numeric" maxlength="2" placeholder="0" value="'+(sc[0]||'')+'" style="width:48px;text-align:center" /><span style="color:var(--faint)">–</span><input id="fs_a_'+e.id+'" inputmode="numeric" maxlength="2" placeholder="0" value="'+(sc[1]||'')+'" style="width:48px;text-align:center" /><button class="pbtn" style="margin-left:auto" onclick="setFinalScore(\''+e.id+'\')">Save score</button></div></div>'
     : '';
-  return '<div class="pmatch"><div class="pm-top"><span class="stage">'+stage+'</span><span class="time">'+when+'</span></div>'+ctrl+scoreUI+stat+'</div>';
+  const odds = (typeof oddsBlock==='function') ? oddsBlock(e) : '';
+  return '<div class="pmatch"><div class="pm-top"><span class="stage">'+stage+'</span><span class="time">'+when+'</span></div>'+ctrl+odds+scoreUI+stat+'</div>';
 }
 function renderPredictList(){
   const box=document.getElementById('predList'); if(!box) return;
