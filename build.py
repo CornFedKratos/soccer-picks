@@ -741,6 +741,7 @@ function openRulesModal(){ closeRulesModal();
     +'<div>⚽ <b>Pick the winner</b> of every match for the rest of the 2026 World Cup. Each correct pick = <b>3 points</b>.</div>'
     +'<div>🥅 In the <b>Final</b>, you will also call the score — nail the result <b>and</b> the score for <b>5 points</b>.</div>'
     +'<div>💵 Most points at the end takes the <b style="color:var(--gold,#f4c24b)">$100 cash</b> — from Don, due on sight.</div>'
+    +'<div>🔔 <b>Pick your alerts.</b> In the <b>Notifications</b> panel below, follow only the countries you care about (or all of them) and toggle the daily fixtures brief — keep the noise to just what you want.</div>'
     +'</div>'
     +'<p style="margin:16px 0 0;font-size:13px;color:#9fb3d1;font-style:italic">May the most knowledgeable futbol fan win… or not. Good luck! ⚽</p>'
     +'<button onclick="closeRulesModal()" style="margin-top:18px;width:100%;background:var(--cyan,#38bdf8);color:#08111c;border:0;border-radius:10px;padding:11px;font-weight:800;font-size:14px;cursor:pointer">Got it</button>'
