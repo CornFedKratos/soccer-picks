@@ -363,6 +363,18 @@ Deno.serve(async (req) => {
   try {
     const res = await fetch(ESPN); const data = await res.json();
     const events = data?.events || [];
+    // Also pull a forward window so upcoming knockout fixtures land in `matches`.
+    // The bare scoreboard only returns today; without this, R32+ rows never exist
+    // and wc_set_pick returns 'closed' (picks stay locked even after groups finish).
+    try {
+      const now0 = new Date();
+      const end0 = new Date(now0.getTime() + 12 * 86400000);
+      const ymd0 = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, "");
+      const fr = await fetch(`${ESPN}?dates=${ymd0(now0)}-${ymd0(end0)}`);
+      const fd = await fr.json();
+      const seen0 = new Set((events as any[]).map((e: any) => e.id));
+      for (const e of ((fd?.events || []) as any[])) if (!seen0.has(e.id)) events.push(e);
+    } catch (_) {}
     const head = await sb.from("goal_events").select("id", { count: "exact", head: true });
     const firstRun = (head.count ?? 0) === 0;
     const cardHead = await sb.from("card_events").select("id", { count: "exact", head: true });

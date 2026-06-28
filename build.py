@@ -618,8 +618,11 @@ function renderPredictBoard(){
   rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct);
   const lb=rows.map((r,i)=>'<div class="lbrow clk'+(r.me?' me':'')+'" onclick="openPicks(\''+r.pid+'\')"><span class="rk">'+(i+1)+'</span><span class="who">'+String(r.name).replace(/</g,'&lt;')+(r.me?' <span class="youtag">you</span>':'')+'</span><span class="rec">'+r.correct+'/'+r.total+'</span><span class="pp">'+r.pts+'<span class="u">pts</span></span><span class="lbchev">›</span></div>').join('')
     || '<div class="lbrow"><span class="who" style="color:var(--faint)">No players yet — be the first to pick</span></div>';
+  const lbnote = (typeof groupsDone==='function' && groupsDone())
+    ? '<div class="lbnote">🏆 Knockout R32 picks are now open! The group stage was practice — the leaderboard has reset to zero. Pick every match the rest of the way.</div>'
+    : '<div class="lbnote">🧪 The group stage is for testing. The real tournament starts at the Round of 32 — the leaderboard resets to zero then.</div>';
   box.innerHTML='<div class="lbcard"><div class="lbhead">Leaderboard <span class="hint">3 pts per correct result · tap a name for picks</span></div>'
-    +'<div class="lbnote">🧪 The group stage is for testing. The real tournament starts at the Round of 32 — the leaderboard resets to zero then.</div>'+lb
+    +lbnote+lb
     +'<div class="pbtns"><button class="pbtn" onclick="loadPredData()">Refresh</button></div></div>';
 }
 // Picks modal: tap a leaderboard name to see all of that player's picks with right/wrong.
