@@ -488,7 +488,10 @@
       font-size:10px; letter-spacing:1px; text-transform:uppercase; color:var(--gold); text-align:center;
       margin-bottom:9px; padding-bottom:6px; border-bottom:1px solid rgba(244,194,75,.22)}
     .bracket-scroll.br-full .ties{display:flex; flex-direction:column; flex:1 1 auto}
-    .bracket-scroll.br-full .tie{display:flex; flex:1 1 0; align-items:center; position:relative; min-height:56px; margin-bottom:0}
+    /* flex:1 0 auto — ties grow to fill the column but NEVER shrink below the card height
+       (basis 0 let the 16 R32 ties squash to min-height and the cards overlapped) */
+    .bracket-scroll.br-full .tie{display:flex; flex:1 0 auto; align-items:center; position:relative; min-height:0; margin-bottom:0; padding:3px 0}
+    .bracket-scroll.br-full .tie .mcard{padding:6px 9px; font-size:11.5px; border-radius:10px}
     .bracket-scroll.br-full .tie .slot{padding:3px 0}
     .bracket-scroll.br-full .tie .slot .flag{font-size:13px; width:18px}
     .bracket-scroll.br-full .tie .slot.tbd .nm{font-size:11px}
@@ -1455,8 +1458,13 @@ function renderPredictList(){
   keys.forEach(k=>{ html+='<div class="pday"><div class="daylabel">'+dayLabel(new Date(days[k][0].utc))+'<span></span></div>'+days[k].map(predMatchCard).join('')+'</div>'; });
   const locked=DATA.events.filter(e=>e.ko && pickable(e) && !pickOpen(e) && e.state!=='post').sort((a,b)=>new Date(a.utc)-new Date(b.utc));
   if(locked.length){
-    html+='<div class="pday"><div class="daylabel">🔒 Knockout — locked until the group stage ends<span></span></div>'
-      + locked.map(e=>'<div class="pmatch" style="opacity:.55"><div class="pm-top"><span class="stage">Knockout</span><span class="time" style="color:var(--gold);font-weight:700">🔒 Locked</span></div><div class="pkrow ko"><span class="pk" style="cursor:default;pointer-events:none">'+norm(e.home)+'</span><span class="pk" style="cursor:default;pointer-events:none">'+norm(e.away)+'</span></div></div>').join('')
+    const gd=groupsDone();
+    const hdr = gd ? '🔒 Picks closed — match under way' : '🔒 Knockout — locked until the group stage ends';
+    html+='<div class="pday"><div class="daylabel">'+hdr+'<span></span></div>'
+      + locked.map(e=>{ const live=e.state==='in';
+          const tag = live ? ('🔴 Live'+((e.hs!=null&&e.as!=null)?' '+e.hs+'–'+e.as:'')) : (gd ? '🔒 Kicked off' : '🔒 Locked');
+          const tcol = live ? '#ff5f6d' : 'var(--gold)';
+          return '<div class="pmatch" style="opacity:.6"><div class="pm-top"><span class="stage">Knockout</span><span class="time" style="color:'+tcol+';font-weight:700">'+tag+'</span></div><div class="pkrow ko"><span class="pk" style="cursor:default;pointer-events:none">'+norm(e.home)+'</span><span class="pk" style="cursor:default;pointer-events:none">'+norm(e.away)+'</span></div></div>'; }).join('')
       +'</div>';
   }
   const settled=DATA.events.filter(e=>e.state==='post'&&pickable(e)&&MYPICKS[e.id]&&!pickOpen(e)).sort((a,b)=>new Date(b.utc)-new Date(a.utc));
