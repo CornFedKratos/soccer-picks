@@ -339,6 +339,15 @@ swap(
   """const raw=await fetchSB((function(){var a=new Date(Date.now()-864e5),b=new Date(Date.now()+12*864e5),f=function(d){return d.toISOString().slice(0,10).replace(/-/g,'');};return f(a)+'-'+f(b);})());""",
   "liveTick forward-window odds refresh")
 
+# ESPN caps range queries at 100 events; the full tournament is 104. Without limit the
+# fixed 20260611-20260719 fetch silently DROPS the last 4 fixtures (both SFs, 3rd place,
+# and the FINAL) — the bracket shows TBD and the Final's pool points would never score
+# on a fresh page load. limit=200 returns all 104 (verified live 2026-07-01).
+swap(
+  """const r=await fetch(SB+(range?('?dates='+range):'')); if(!r.ok) throw new Error('espn '+r.status);""",
+  """const r=await fetch(SB+'?limit=200'+(range?('&dates='+range):'')); if(!r.ok) throw new Error('espn '+r.status);""",
+  "fetchSB limit=200 (ESPN 100-event cap)")
+
 swap(
   """function statusBadge(k){
   if(k==='in')  return '<span class="st st-in">IN</span>';
@@ -626,7 +635,7 @@ async function setFinalScore(id){
   const h=((hi&&hi.value)||'').trim(), a=((ai&&ai.value)||'').trim();
   if(!/^\d{1,2}$/.test(h)||!/^\d{1,2}$/.test(a)){ PICK_FLASH[id]='err:Enter both scores'; renderPredict(); return; }
   if(!MYPICKS[id]){ PICK_FLASH[id]='err:Pick the winner first'; renderPredict(); return; }
-  const sc=h+'-'+a; MYSCORES[id]=sc; PICK_FLASH[id]='saving'; renderPredict();
+  const sc=(+h)+'-'+(+a); MYSCORES[id]=sc; PICK_FLASH[id]='saving'; renderPredict();  // +h strips leading zeros: '01-1' would never string-match the result
   let status=null; try{ const r=await sb.rpc('wc_set_pick',{ p_code:CODE, p_email:ME, p_match:id, p_pick:MYPICKS[id], p_score:sc }); status=r&&r.data; }catch(x){}
   if(status==='ok'){ PICK_FLASH[id]='saved'; renderPredict(); setTimeout(()=>{ if(PICK_FLASH[id]==='saved'){ delete PICK_FLASH[id]; renderPredict(); } },2500); }
   else { PICK_FLASH[id]='err:Score not saved — tap Save score to retry'; renderPredict(); }
@@ -728,7 +737,7 @@ function predMatchCard(e){
   const sc=(MYSCORES[e.id]||'').split('-');
   const scoreUI = isFinalEvent(e)
     ? '<div style="margin-top:9px;padding-top:9px;border-top:1px solid var(--line)">'
-      +'<div style="font-size:12px;color:#9fb3d1;margin-bottom:7px">Predict the final score for <b style="color:var(--gold)">5 pts</b> (winner alone = 3)</div>'
+      +'<div style="font-size:12px;color:#9fb3d1;margin-bottom:7px">Predict the final score for <b style="color:var(--gold)">5 pts</b> (winner alone = 3). Score counts extra time; a shootout doesn\'t change it.</div>'
       +'<div style="display:flex;align-items:center;gap:8px"><input id="fs_h_'+e.id+'" inputmode="numeric" maxlength="2" placeholder="0" value="'+(sc[0]||'')+'" style="width:48px;text-align:center" /><span style="color:var(--faint)">–</span><input id="fs_a_'+e.id+'" inputmode="numeric" maxlength="2" placeholder="0" value="'+(sc[1]||'')+'" style="width:48px;text-align:center" /><button class="pbtn" style="margin-left:auto" onclick="setFinalScore(\''+e.id+'\')">Save score</button></div></div>'
     : '';
   const odds = (typeof oddsBlock==='function') ? oddsBlock(e) : '';
@@ -813,7 +822,7 @@ function openRulesModal(){ closeRulesModal();
     +'<p style="margin:0 0 14px;color:#9fb3d1;font-size:13px">Here is how it works:</p>'
     +'<div style="display:flex;flex-direction:column;gap:11px;font-size:14px;line-height:1.5">'
     +'<div>⚽ <b>Pick the winner</b> of every match for the rest of the 2026 World Cup. Each correct pick = <b>3 points</b>.</div>'
-    +'<div>🥅 In the <b>Final</b>, you will also call the score — nail the result <b>and</b> the score for <b>5 points</b>.</div>'
+    +'<div>🥅 In the <b>Final</b>, you will also call the score — nail the result <b>and</b> the score for <b>5 points</b>. The score includes extra time if played; a penalty shootout doesn\'t change it.</div>'
     +'<div>💵 Most points at the end takes the <b style="color:var(--gold,#f4c24b)">$100 cash</b> — from Don, due on sight.</div>'
     +'<div>🔔 <b>Pick your alerts.</b> In the <b>Notifications</b> panel below, follow only the countries you care about (or all of them) and toggle the daily fixtures brief — keep the noise to just what you want.</div>'
     +'</div>'
@@ -837,7 +846,7 @@ tpl = tpl[:s] + NEW_PRED_JS + tpl[e:]
 # 7a) processEvents: capture the actual winner (incl. penalties) from ESPN's competitor.winner flag,
 # so knockout picks score by who advanced — not the raw 90/120-min scoreline.
 PE_OLD = "m.hs=+(H.score||0); m.as=+(A.score||0);"
-PE_NEW = "m.hs=+(H.score||0); m.as=+(A.score||0); m.win=(H.winner===true?'h':(A.winner===true?'a':''));"
+PE_NEW = "m.hs=+(H.score||0); m.as=+(A.score||0); m.win=(H.winner===true?'h':(A.winner===true?'a':'')); if(H.shootoutScore!=null||A.shootoutScore!=null){m.so_h=+(H.shootoutScore||0); m.so_a=+(A.shootoutScore||0);}"
 if PE_OLD not in tpl: fail("processEvents score anchor not found")
 tpl = tpl.replace(PE_OLD, PE_NEW, 1)
 
@@ -861,6 +870,71 @@ swap(
   "ko.forEach(e=>R[koRound(e)].push(e));",
   "ko.forEach(e=>{const r=koRound(e); if(R[r]) R[r].push(e);});",
   "renderBracket guard 3P bucket")
+
+# 7a-3) Order bracket columns by true bracket position, not kickoff date.
+# ESPN event ids = FIFA match numbers, but pairings are NOT adjacent (R16-1 = W1 vs W3,
+# R16-6 = W9 vs W8, QF2 = R16-5 vs R16-6). Cascade top-down from the Final: place each
+# tie's two feeders adjacent in the previous column so the connector lines are truthful.
+# Feeders resolve via ESPN's placeholder text ("Round of 32 9 Winner" -> R32 match 9) or,
+# once resolved, by finding the previous-round tie the team played in. Unresolvable
+# feeders (static seed) fall back to FIFA-match-number order.
+swap(
+  "ko.forEach(e=>{const r=koRound(e); if(R[r]) R[r].push(e);});",
+  r"""ko.forEach(e=>{const r=koRound(e); if(R[r]) R[r].push(e);});
+  const byId=(a,b)=>(Number(a.id)||0)-(Number(b.id)||0);
+  Object.keys(R).forEach(k=>R[k].sort(byId));
+  const feederOf=(name,prev)=>{
+    if(!name) return null;
+    const m=/(?:Round of \d+|Quarterfinal|Semifinal)\s+(\d+)\s+Winner/i.exec(name);
+    if(m) return prev[Number(m[1])-1]||null;
+    return prev.find(p=>p.home===name||p.away===name)||null;
+  };
+  const orderPrev=(cur,prev)=>{
+    if(!cur.length||!prev.length) return prev;
+    const used=new Set(), out=[];
+    cur.forEach(t=>[t.home,t.away].forEach(n=>{const f=feederOf(n,prev); if(f&&!used.has(f.id)){used.add(f.id); out.push(f);}}));
+    prev.forEach(p=>{if(!used.has(p.id)) out.push(p);});
+    return out;
+  };
+  R.SF=orderPrev(R.F,R.SF); R.QF=orderPrev(R.SF,R.QF); R.R16=orderPrev(R.QF,R.R16); R.R32=orderPrev(R.R16,R.R32);""",
+  "renderBracket true bracket order")
+
+# 7a-4) Penalty shootouts: ESPN marks shootout kicks as scoringPlay details (shootout:true)
+# while competitor.score stays at the 120' value and shootoutScore/winner carry the result.
+# Capture the shootout flag per timeline event, render pen kicks as 🥅 (pens) instead of ⚽ goals,
+# highlight the winner on match cards via ESPN's winner flag (a 1-1 pens game has no hs>as),
+# and show the shootout tally next to FT-Pens.
+swap(
+  "g:!!dt.scoringPlay, og:!!dt.ownGoal, pen:!!dt.penaltyKick, r:!!dt.redCard, y:!!dt.yellowCard,",
+  "g:!!dt.scoringPlay, og:!!dt.ownGoal, pen:!!dt.penaltyKick, so:!!dt.shootout, r:!!dt.redCard, y:!!dt.yellowCard,",
+  "processEvents capture shootout flag")
+swap(
+  r"""const ic = x.g?'\u26BD':(x.r?'\uD83D\uDFE5':(x.y?'\uD83D\uDFE8':'\u2022'));
+    const extra = x.g?(x.pen?' (P)':(x.og?' (OG)':'')):'';""",
+  r"""const ic = x.so?'\uD83E\uDD45':(x.g?'\u26BD':(x.r?'\uD83D\uDFE5':(x.y?'\uD83D\uDFE8':'\u2022')));
+    const extra = x.so?' (pens)':(x.g?(x.pen?' (P)':(x.og?' (OG)':'')):'');""",
+  "timeline shootout kicks not goals")
+swap(
+  "const hw=done&&o.hs>o.as, aw=done&&o.as>o.hs;",
+  "const hw=done&&(o.win?o.win==='h':o.hs>o.as), aw=done&&(o.win?o.win==='a':o.as>o.hs);",
+  "card winner via ESPN winner flag (pens)")
+swap(
+  """: done?('<span class="time final">'+(o.min||'FT')+'</span>')""",
+  """: done?('<span class="time final">'+(o.min||'FT')+((o.so_h!=null&&o.so_a!=null)?' '+o.so_h+'\\u2013'+o.so_a+'p':'')+'</span>')""",
+  "card shootout tally next to FT-Pens")
+
+# 7a-5) koRound safety net: FIFA match ids are authoritative for WC2026 (760486-760517 verified
+# live). If ESPN ever drops season.slug on a resolved event, the old text fallback returned 'R32'
+# for real team names and classified the 3rd-place match ("Semifinal N Loser") as the Final —
+# which would crown the 3P winner as Champion. Ids close that hole; text remains last resort.
+swap(
+  "if(s==='final') return 'F';\n  const t=e.home+' '+e.away;",
+  "if(s==='final') return 'F';\n  const n=Number(e.id);\n  if(n>=760486&&n<=760501) return 'R32';\n  if(n>=760502&&n<=760509) return 'R16';\n  if(n>=760510&&n<=760513) return 'QF';\n  if(n>=760514&&n<=760515) return 'SF';\n  if(n===760516) return '3P';\n  if(n===760517) return 'F';\n  const t=e.home+' '+e.away;\n  if(/Loser/.test(t)) return '3P';",
+  "koRound id fallback + 3P Loser guard")
+swap(
+  "if(m=s.match(/^Quarterfinal (\\d+) Winner$/)) return 'QF-'+m[1]+' W';",
+  "if(m=s.match(/^Quarterfinal (\\d+) Winner$/)) return 'QF-'+m[1]+' W';\n  if(m=s.match(/^Semifinal (\\d+) Winner$/)) return 'SF-'+m[1]+' W';\n  if(m=s.match(/^Semifinal (\\d+) Loser$/)) return 'SF-'+m[1]+' L';",
+  "koLabel SF patterns")
 
 # 7b) "View Highlights" button on completed match cards (reel modal)
 CARD_OLD = r"""+(showScore?'':oddsBlock(o))+detail+'</div>';"""

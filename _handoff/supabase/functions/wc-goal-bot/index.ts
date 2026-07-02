@@ -361,16 +361,18 @@ Deno.serve(async (req) => {
   if (CRON && req.headers.get("x-cron-secret") !== CRON) return new Response("unauthorized", { status: 401 });
   const out: any = { matches: 0, newGoals: 0, alerted: 0, clipsFound: 0, cards: 0, pregame: 0, summaries: 0, brief: false, reelsQueued: 0, reelsSent: 0, embeds: 0, embedsSent: 0, statsPlayers: 0, subs: 0, testMode: false, firstRun: false };
   try {
-    const res = await fetch(ESPN); const data = await res.json();
+    const res = await fetch(`${ESPN}?limit=200`); const data = await res.json();
     const events = data?.events || [];
-    // Also pull a forward window so upcoming knockout fixtures land in `matches`.
+    // Also pull a -1d..+12d window so upcoming knockout fixtures land in `matches`.
     // The bare scoreboard only returns today; without this, R32+ rows never exist
     // and wc_set_pick returns 'closed' (picks stay locked even after groups finish).
+    // Start a day back: ESPN buckets by US Pacific date, so a late-UTC match that just
+    // finished can live on "yesterday". limit=200 because ESPN caps at 100 events/page.
     try {
-      const now0 = new Date();
-      const end0 = new Date(now0.getTime() + 12 * 86400000);
+      const now0 = new Date(Date.now() - 86400000);
+      const end0 = new Date(Date.now() + 12 * 86400000);
       const ymd0 = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, "");
-      const fr = await fetch(`${ESPN}?dates=${ymd0(now0)}-${ymd0(end0)}`);
+      const fr = await fetch(`${ESPN}?limit=200&dates=${ymd0(now0)}-${ymd0(end0)}`);
       const fd = await fr.json();
       const seen0 = new Set((events as any[]).map((e: any) => e.id));
       for (const e of ((fd?.events || []) as any[])) if (!seen0.has(e.id)) events.push(e);
@@ -431,7 +433,14 @@ Deno.serve(async (req) => {
       const home = cs[0]?.team?.displayName ?? ""; const away = cs[1]?.team?.displayName ?? "";
       const hsc = Number(cs[0]?.score ?? 0); const asc = Number(cs[1]?.score ?? 0);
       const state = e.status?.type?.state ?? "";
-      matchRows.push({ match_id: e.id, home, away, kickoff: e.date, state, home_score: hsc, away_score: asc, updated_at: new Date().toISOString() });
+      // Penalty shootout: competitor `score` stays at the 120' value; the shootout tally and the
+      // advancing side live in separate `shootoutScore` / `winner` fields. Persist them so the
+      // FT summary (and anything else) can report "X win 4-3 on pens" instead of "Draw".
+      const soH = cs[0]?.shootoutScore, soA = cs[1]?.shootoutScore;
+      const winner = cs[0]?.winner === true ? "h" : (cs[1]?.winner === true ? "a" : null);
+      matchRows.push({ match_id: e.id, home, away, kickoff: e.date, state, home_score: hsc, away_score: asc,
+        home_pens: soH != null ? Number(soH) : null, away_pens: soA != null ? Number(soA) : null, winner,
+        updated_at: new Date().toISOString() });
       if (state !== "in" && state !== "post") continue;
       const homeId = cs[0]?.team?.id;
       let rh = 0, ra = 0;
@@ -439,6 +448,9 @@ Deno.serve(async (req) => {
         const clock = p.clock?.displayValue ?? "";
         const who = p.athletesInvolved?.[0]?.displayName ?? "";
         const side = String(p.team?.id) === String(homeId) ? "h" : "a";
+        // Penalty-shootout kicks arrive as scoringPlay:true (shootout:true, clock 120') — they are
+        // NOT goals. Without this skip every converted pen becomes a goal row + Telegram alert.
+        if (p.shootout) continue;
         if (p.scoringPlay) {
           if (side === "h") rh++; else ra++;
           const ev_key = `${e.id}:${clock}:${norm(who)}:${side}`;
@@ -455,12 +467,32 @@ Deno.serve(async (req) => {
       await sb.from("matches").update({ finished_at: new Date().toISOString() }).eq("state", "post").is("finished_at", null);
     }
 
+    // ESPN edits plays after the fact (clock "45'+2'"→"45'", scorer attribution changes) — that
+    // changes the ev_key for the SAME goal, and a plain upsert would insert a duplicate row and
+    // re-alert it. Prefetch existing rows per match: an unseen ev_key whose match+score+side already
+    // exists is a RENAME — update the old row in place (never re-alert), only truly new goals insert.
+    const existingByMatch: Record<string, any[]> = {};
+    if (detected.length) {
+      const ids = [...new Set(detected.map((g) => g.match_id))];
+      const exq = await sb.from("goal_events").select("id,match_id,ev_key,score").in("match_id", ids);
+      for (const r of ((exq.data || []) as any[])) (existingByMatch[r.match_id] ||= []).push(r);
+    }
     for (const g of detected) {
+      const rows = existingByMatch[g.match_id] || (existingByMatch[g.match_id] = []);
+      if (rows.some((r) => r.ev_key === g.ev_key)) continue; // already recorded under this exact key
+      const gSide = g.ev_key.split(":").pop(); // side is the LAST segment (FT summary depends on this)
+      const renamed = rows.find((r) => r.score === g.score && String(r.ev_key).split(":").pop() === gSide);
+      if (renamed) {
+        await sb.from("goal_events").update({ ev_key: g.ev_key, minute: g.minute, scorer: g.scorer }).eq("id", renamed.id);
+        renamed.ev_key = g.ev_key;
+        continue;
+      }
       const ins = await sb.from("goal_events").upsert({
         match_id: g.match_id, ev_key: g.ev_key, home: g.home, away: g.away,
         minute: g.minute, scorer: g.scorer, score: g.score, alerted: firstRun ? true : false,
       }, { onConflict: "ev_key", ignoreDuplicates: true }).select("id").maybeSingle();
       if (ins.error || !ins.data) continue;
+      rows.push({ id: ins.data.id, match_id: g.match_id, ev_key: g.ev_key, score: g.score });
       out.newGoals++;
       const recent = (Date.now() - new Date(g.kickoff).getTime()) < 3 * 3600 * 1000;
       const shouldAlert = !firstRun && (g.state === "in" || (g.state === "post" && recent));
@@ -561,7 +593,7 @@ Deno.serve(async (req) => {
     // post-game summary: winner, score, scorers sorted by minute with country flags — fires once per match
     if (!firstRun) {
       const fin = await sb.from("matches")
-        .select("match_id,home,away,home_score,away_score,finished_at")
+        .select("match_id,home,away,home_score,away_score,home_pens,away_pens,winner,finished_at")
         .eq("state", "post").eq("summary_sent", false).not("finished_at", "is", null)
         .lte("finished_at", new Date(Date.now() - SUMMARY_DELAY_MIN * 60 * 1000).toISOString())
         .limit(8);
@@ -573,7 +605,12 @@ Deno.serve(async (req) => {
           return { minute: g.minute, scorer: g.scorer, flag: flagFor(team), ord: minOrd(g.minute) };
         }).sort((a: any, b: any) => a.ord - b.ord);
         const hs = m.home_score ?? 0, as = m.away_score ?? 0;
-        const verdict = hs === as ? "Draw" : `${(hs > as ? m.home : m.away)} win`;
+        // Knockout: a level score decided on pens is NOT a draw — name the advancing team and the tally.
+        const winName = m.winner === "h" ? m.home : m.winner === "a" ? m.away : null;
+        const pens = m.home_pens != null && m.away_pens != null;
+        const verdict = pens && winName
+          ? `${winName} win ${m.winner === "h" ? `${m.home_pens}-${m.away_pens}` : `${m.away_pens}-${m.home_pens}`} on pens`
+          : hs === as ? (winName ? `${winName} win` : "Draw") : `${(hs > as ? m.home : m.away)} win`;
         const lines = goals.map((g: any) => `${g.minute} ${g.flag} ${g.scorer || "Goal"}`).join("\n");
         const text = `🏁 Full-time\n${flagFor(m.home)} ${m.home} ${hs}-${as} ${m.away} ${flagFor(m.away)}\n${verdict}` +
           (lines ? `\n\nScorers:\n${lines}` : "") + `\nFIFA World Cup`;
