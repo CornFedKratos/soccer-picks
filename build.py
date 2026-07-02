@@ -94,6 +94,33 @@ NEW_CSS = r"""
   .picksbox .pnote{font-size:12px; color:var(--gold); margin:8px 0 6px; line-height:1.45}
   .picksbox .psec{font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--faint); font-weight:800; margin:14px 0 2px}
   .picksbox .srow:first-of-type{border-top:0}
+
+  /* --- "View full bracket" toggle (mobile) --- */
+  .brfull-toggle{display:none}
+  @media(max-width:820px){
+    .brfull-toggle{display:flex; align-items:center; justify-content:center; gap:7px; width:100%;
+      margin:0 0 12px; padding:10px 12px; font-family:'Archivo',sans-serif; font-weight:800;
+      font-size:12.5px; letter-spacing:.4px; text-transform:uppercase; color:var(--gold);
+      background:rgba(244,194,75,.08); border:1px solid rgba(244,194,75,.32); border-radius:11px; cursor:pointer}
+    .brfull-toggle:active{transform:scale(.99)}
+    /* Full-bracket mode: restore the horizontal multi-column bracket, scaled for phones */
+    .bracket-scroll.br-full{overflow-x:auto; padding-bottom:14px; -webkit-overflow-scrolling:touch}
+    .bracket-scroll.br-full .bracket{display:flex; gap:16px; min-width:900px; padding:6px 2px; align-items:stretch}
+    .bracket-scroll.br-full .round{display:flex !important; flex-direction:column; min-width:148px; width:auto; gap:0}
+    .bracket-scroll.br-full .round-h{display:block; font-family:'Archivo',sans-serif; font-weight:800;
+      font-size:10px; letter-spacing:1px; text-transform:uppercase; color:var(--gold); text-align:center;
+      margin-bottom:9px; padding-bottom:6px; border-bottom:1px solid rgba(244,194,75,.22)}
+    .bracket-scroll.br-full .ties{display:flex; flex-direction:column; flex:1 1 auto}
+    .bracket-scroll.br-full .tie{display:flex; flex:1 1 0; align-items:center; position:relative; min-height:56px; margin-bottom:0}
+    .bracket-scroll.br-full .tie .slot{padding:3px 0}
+    .bracket-scroll.br-full .tie .slot .flag{font-size:13px; width:18px}
+    .bracket-scroll.br-full .tie .slot.tbd .nm{font-size:11px}
+    .bracket-scroll.br-full .tie .vs{margin:3px 0}
+    /* bracket connector lines (mirror desktop) — skip the last two columns (Final + champ) */
+    .bracket-scroll.br-full .round:nth-last-child(n+3) .tie::after{content:''; position:absolute; left:100%; top:50%; width:16px; height:2px; background:#46577d}
+    .bracket-scroll.br-full .round:nth-last-child(n+3) .ties .tie:nth-child(odd)::before{content:''; position:absolute; left:calc(100% + 16px); top:50%; width:2px; height:100%; background:#46577d}
+    .bracket-scroll.br-full .champ .trophy{font-size:28px}
+  }
 """
 CLOSE = '</style>'
 if CLOSE not in tpl: fail("no </style> after font swap")
@@ -277,6 +304,30 @@ swap(
   """  finally{ fetchLeaders(); clearTimeout(liveTimer); liveTimer=setTimeout(liveTick, liveCount()>0?30000:120000); }""",
   """  finally{ fetchLeaders(); fetchStandings(); clearTimeout(liveTimer); liveTimer=setTimeout(liveTick, liveCount()>0?30000:120000); }""",
   "liveTick fetchStandings hook")
+
+# Mobile "view full bracket" toggle: button + id on the scroll wrapper
+swap(
+  '<div class="bracket-scroll"><div class="bracket" id="bracketBox"></div></div>',
+  '<button class="brfull-toggle" id="brFullToggle" onclick="toggleFullBracket()">⤢ View full bracket</button><div class="bracket-scroll" id="bracketScroll"><div class="bracket" id="bracketBox"></div></div>',
+  "mobile full-bracket toggle markup")
+
+# full-bracket toggle behaviour (persisted); collapses the round-tabs when on
+swap(
+  "function setBracketRound(r){ BR_ROUND=r; applyBracketRound(); }",
+  "function applyFullBracket(){ var on=false; try{ on=localStorage.getItem('wc_br_full')==='1'; }catch(e){}"
+  " var sc=document.getElementById('bracketScroll'); if(sc) sc.classList.toggle('br-full', on);"
+  " var tb=document.getElementById('brFullToggle'); if(tb) tb.textContent = on ? '❐ Single-round view' : '⤢ View full bracket';"
+  " var tabs=document.getElementById('brTabs'); if(tabs) tabs.style.display = on ? 'none' : ''; }\n"
+  "function toggleFullBracket(){ var on=false; try{ on=localStorage.getItem('wc_br_full')==='1'; }catch(e){}"
+  " try{ localStorage.setItem('wc_br_full', on?'0':'1'); }catch(e){} applyFullBracket(); }\n"
+  "function setBracketRound(r){ BR_ROUND=r; applyBracketRound(); }",
+  "full-bracket toggle JS")
+
+# apply saved full-bracket state whenever the bracket re-renders
+swap(
+  "  document.getElementById('bracketBox').innerHTML=",
+  "  if(typeof applyFullBracket==='function') setTimeout(applyFullBracket,0);\n  document.getElementById('bracketBox').innerHTML=",
+  "renderBracket applyFullBracket hook")
 
 # liveTick: poll a forward window (yesterday..+12d) instead of today-only, so upcoming
 # knockout odds + kickoffs refresh on every ESPN poll (not just when a match is "today").
@@ -781,6 +832,27 @@ PE_OLD = "m.hs=+(H.score||0); m.as=+(A.score||0);"
 PE_NEW = "m.hs=+(H.score||0); m.as=+(A.score||0); m.win=(H.winner===true?'h':(A.winner===true?'a':''));"
 if PE_OLD not in tpl: fail("processEvents score anchor not found")
 tpl = tpl.replace(PE_OLD, PE_NEW, 1)
+
+# 7a-2) Determine knockout round from ESPN's season.slug, not from placeholder team names.
+# Once ESPN fills real teams into R16/QF/etc, the "Round of 32 X Winner" text disappears and the
+# old name-based koRound dumped resolved matches back into R32 (only unresolved ties stayed put).
+# The slug ('round-of-16', 'quarterfinals', ...) is stable regardless of whether teams are known.
+swap(
+  "const ko=!(GROUP_OF[home] && GROUP_OF[away] && GROUP_OF[home]===GROUP_OF[away]);",
+  "const slug=(e.season&&e.season.slug)||''; const ko = slug ? (slug!=='group-stage') : !(GROUP_OF[home] && GROUP_OF[away] && GROUP_OF[home]===GROUP_OF[away]);",
+  "processEvents slug+ko")
+swap(
+  "const m={id:e.id, utc:e.date, home, away, group:GROUP_OF[home]||'', ko, state, min:st.shortDetail||''};",
+  "const m={id:e.id, utc:e.date, home, away, group:GROUP_OF[home]||'', ko, slug, state, min:st.shortDetail||''};",
+  "processEvents carry slug")
+swap(
+  "function koRound(e){ const t=e.home+' '+e.away;\n  if(/Round of 16/.test(t)) return 'QF';\n  if(/Round of 32/.test(t)) return 'R16';\n  if(/Quarterfinal/.test(t)) return 'SF';\n  if(/Semifinal/.test(t)) return 'F';\n  return 'R32';\n}",
+  "function koRound(e){\n  const s=e.slug||'';\n  if(s==='round-of-32') return 'R32';\n  if(s==='round-of-16') return 'R16';\n  if(s==='quarterfinals') return 'QF';\n  if(s==='semifinals') return 'SF';\n  if(s==='3rd-place-match') return '3P';\n  if(s==='final') return 'F';\n  const t=e.home+' '+e.away;\n  if(/Semifinal/.test(t)) return 'F';\n  if(/Quarterfinal/.test(t)) return 'SF';\n  if(/Round of 16/.test(t)) return 'QF';\n  if(/Round of 32/.test(t)) return 'R16';\n  return 'R32';\n}",
+  "koRound by slug")
+swap(
+  "ko.forEach(e=>R[koRound(e)].push(e));",
+  "ko.forEach(e=>{const r=koRound(e); if(R[r]) R[r].push(e);});",
+  "renderBracket guard 3P bucket")
 
 # 7b) "View Highlights" button on completed match cards (reel modal)
 CARD_OLD = r"""+(showScore?'':oddsBlock(o))+detail+'</div>';"""
